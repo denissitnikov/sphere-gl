@@ -3,8 +3,38 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>sphere-gl — Sub-Millisecond WebGL2 Wallpaper &amp; Website Background Studio</title>
-  <meta name="description" content="Open-source procedural WebGL2 & OKLCH studio for generating 4K/5K wallpapers and sub-millisecond website backgrounds with zero dependencies." />
+  <title>sphere-gl — Sub-Millisecond WebGL2 Backgrounds &amp; 5K Wallpaper Studio</title>
+  <meta name="description" content="22 KB zero-dependency WebGL2 & OKLCH engine that synthesizes a fresh, never-muddy diffused sphere or mesh background on every visit in <1 ms with 0% idle GPU." />
+
+  <!-- Open Graph & Social Card -->
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://denissitnikov.github.io/sphere-gl/" />
+  <meta property="og:title" content="sphere-gl — Fresh WebGL2 Studio Canvas on Every Visit (<1 ms GPU)" />
+  <meta property="og:description" content="Zero dependencies, 22 KB gzip, 0% idle GPU. Diffused f/0.95 spheres & liquid mesh gradients in perceptual OKLCH—for HTML, CSS, React, Framer, and 5K wallpapers." />
+  <meta property="og:image" content="https://denissitnikov.github.io/sphere-gl/assets/og-card.jpg" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="sphere-gl — Sub-Millisecond WebGL2 & OKLCH Background Engine" />
+  <meta name="twitter:description" content="Synthesize a fresh, never-muddy studio background on every reload in <1 ms with automatic light/dark UI tokens." />
+  <meta name="twitter:image" content="https://denissitnikov.github.io/sphere-gl/assets/og-card.jpg" />
+
+  <!-- Preload ES Modules for First-Frame Synthesis -->
+  <link rel="modulepreload" href="./src/index.js" />
+  <link rel="modulepreload" href="./src/shader.js" />
+  <link rel="modulepreload" href="./src/palettes.js" />
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareSourceCode",
+    "name": "sphere-gl",
+    "codeRepository": "https://github.com/denissitnikov/sphere-gl",
+    "license": "https://opensource.org/licenses/MIT",
+    "programmingLanguage": ["JavaScript", "GLSL"],
+    "author": { "@type": "Person", "name": "Denis S.", "url": "https://slidetab.app" },
+    "description": "Sub-millisecond WebGL2 & OKLCH procedural website background and 5K wallpaper engine."
+  }
+  </script>
+
   <style>
     :root {
       --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Inter", system-ui, sans-serif;
@@ -21,29 +51,18 @@
       --hud-pill-active-text: #0b0f19;
       --hud-shadow: 0 20px 50px rgba(0, 0, 0, 0.22), 0 2px 10px rgba(0, 0, 0, 0.10);
 
-      --hero-text: #0f172a;
-      --hero-sub: rgba(15, 23, 42, 0.68);
-      --hero-badge-bg: rgba(255, 255, 255, 0.52);
-      --hero-badge-border: rgba(15, 23, 42, 0.10);
-      --hero-btn-primary-bg: #0f172a;
-      --hero-btn-primary-fg: #ffffff;
-      --hero-btn-secondary-bg: rgba(255, 255, 255, 0.55);
-      --hero-btn-secondary-fg: #0f172a;
+      /* Dynamic UI tokens populated live by sphere-gl on every Space press */
+      --sphere-ink: #0f172a;
+      --sphere-ink-muted: rgba(15, 23, 42, 0.68);
+      --sphere-glass: rgba(255, 255, 255, 0.58);
+      --sphere-glass-border: rgba(15, 23, 42, 0.10);
+      --sphere-accent: #0a84ff;
     }
 
     body[data-canvas-theme="dark"] {
       --hud-bg: rgba(12, 16, 26, 0.64);
       --hud-bg-subtle: rgba(12, 16, 26, 0.50);
       --hud-border: rgba(255, 255, 255, 0.15);
-
-      --hero-text: #ffffff;
-      --hero-sub: rgba(255, 255, 255, 0.72);
-      --hero-badge-bg: rgba(255, 255, 255, 0.10);
-      --hero-badge-border: rgba(255, 255, 255, 0.18);
-      --hero-btn-primary-bg: #ffffff;
-      --hero-btn-primary-fg: #090d16;
-      --hero-btn-secondary-bg: rgba(255, 255, 255, 0.10);
-      --hero-btn-secondary-fg: #ffffff;
     }
 
     * {
@@ -72,6 +91,7 @@
       z-index: 0;
     }
 
+    /* Top Telemetry & Palette Bar */
     .top-bar {
       position: fixed;
       top: 18px;
@@ -82,9 +102,13 @@
       justify-content: space-between;
       flex-wrap: wrap;
       gap: 10px;
-      z-index: 20;
+      z-index: 22;
       pointer-events: none;
       transition: opacity 0.28s cubic-bezier(0.16, 1, 0.3, 1), transform 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    body[data-preview="wallpaper"] .top-bar {
+      top: 42px;
     }
 
     body.ui-hidden .top-bar,
@@ -134,14 +158,18 @@
     }
 
     .top-link {
-      color: rgba(255, 255, 255, 0.72);
+      color: rgba(255, 255, 255, 0.75);
       text-decoration: none;
       font-size: 12px;
-      font-weight: 500;
+      font-weight: 520;
       transition: color 0.15s ease;
       display: inline-flex;
       align-items: center;
-      gap: 5px;
+      gap: 4px;
+      background: none;
+      border: none;
+      cursor: pointer;
+      font-family: inherit;
     }
     .top-link:hover {
       color: #ffffff;
@@ -161,7 +189,6 @@
       font-variant-numeric: tabular-nums;
       white-space: nowrap;
     }
-
     .perf-readout strong {
       color: #6ee7b7;
       font-weight: 600;
@@ -210,11 +237,12 @@
     .seed-btn:hover {
       background: var(--hud-pill-hover);
     }
-    .seed-btn:active {
-      transform: scale(0.97);
-    }
 
-    .hero-preview {
+    /* =========================================================================
+       CONTEXT MODE 2: Live Adaptive Website Hero Mockup (`data-preview="website"`)
+       Demonstrates automatic `--sphere-ink` & `--sphere-glass` token adaptation!
+       ========================================================================= */
+    .website-preview {
       position: fixed;
       inset: 0;
       display: flex;
@@ -222,15 +250,15 @@
       align-items: center;
       justify-content: center;
       text-align: center;
-      padding: 32px 24px 110px;
+      padding: 64px 24px 124px;
       z-index: 10;
       pointer-events: none;
       opacity: 0;
       transform: translateY(10px) scale(0.99);
-      transition: opacity 0.32s cubic-bezier(0.16, 1, 0.3, 1), transform 0.32s cubic-bezier(0.16, 1, 0.3, 1);
+      transition: opacity 0.30s cubic-bezier(0.16, 1, 0.3, 1), transform 0.30s cubic-bezier(0.16, 1, 0.3, 1);
     }
 
-    body.show-hero .hero-preview {
+    body[data-preview="website"] .website-preview {
       opacity: 1;
       transform: translateY(0) scale(1);
     }
@@ -239,39 +267,46 @@
       display: inline-flex;
       align-items: center;
       gap: 8px;
-      padding: 6px 14px;
+      padding: 7px 15px;
       border-radius: 999px;
-      background: var(--hero-badge-bg);
-      border: 1px solid var(--hero-badge-border);
-      backdrop-filter: blur(18px) saturate(1.6);
-      -webkit-backdrop-filter: blur(18px) saturate(1.6);
-      color: var(--hero-text);
+      background: var(--sphere-glass);
+      border: 1px solid var(--sphere-glass-border);
+      backdrop-filter: blur(20px) saturate(1.7);
+      -webkit-backdrop-filter: blur(20px) saturate(1.7);
+      color: var(--sphere-ink);
       font-size: 12.5px;
       font-weight: 600;
-      letter-spacing: 0.01em;
-      margin-bottom: 22px;
-      transition: color 0.25s ease, background 0.25s ease, border-color 0.25s ease;
+      letter-spacing: -0.005em;
+      margin-bottom: 20px;
+      transition: all 0.25s ease;
+    }
+
+    .hero-eyebrow-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--sphere-accent);
     }
 
     .hero-headline {
       max-width: 820px;
-      font-size: clamp(38px, 6.2vw, 76px);
-      font-weight: 700;
+      font-size: clamp(36px, 5.8vw, 72px);
+      font-weight: 720;
       line-height: 1.03;
       letter-spacing: -0.035em;
-      color: var(--hero-text);
-      margin-bottom: 18px;
+      color: var(--sphere-ink);
+      margin-bottom: 16px;
       transition: color 0.25s ease;
     }
 
     .hero-sub {
-      max-width: 560px;
-      font-size: clamp(16px, 1.8vw, 20px);
+      max-width: 570px;
+      font-size: clamp(15.5px, 1.65vw, 19px);
       line-height: 1.5;
       font-weight: 450;
       letter-spacing: -0.01em;
-      color: var(--hero-sub);
-      margin-bottom: 30px;
+      color: var(--sphere-ink-muted);
+      margin-bottom: 26px;
       transition: color 0.25s ease;
     }
 
@@ -280,37 +315,150 @@
       align-items: center;
       gap: 12px;
       pointer-events: auto;
+      margin-bottom: 34px;
     }
 
     .hero-cta {
       appearance: none;
       border: 1px solid transparent;
       border-radius: 999px;
-      padding: 13px 24px;
+      padding: 12px 22px;
       font-family: var(--font-sans);
-      font-size: 14.5px;
-      font-weight: 600;
+      font-size: 14px;
+      font-weight: 620;
       letter-spacing: -0.01em;
       cursor: pointer;
       transition: transform 0.15s ease, background 0.25s ease, color 0.25s ease;
     }
-
     .hero-cta.primary {
-      background: var(--hero-btn-primary-bg);
-      color: var(--hero-btn-primary-fg);
+      background: var(--sphere-ink);
+      color: var(--sphere-base, #fff);
       box-shadow: 0 10px 28px rgba(0, 0, 0, 0.14);
     }
+    body[data-canvas-theme="dark"] .hero-cta.primary {
+      color: #090d16;
+    }
+    body[data-canvas-theme="light"] .hero-cta.primary {
+      color: #ffffff;
+    }
     .hero-cta.secondary {
-      background: var(--hero-btn-secondary-bg);
-      color: var(--hero-btn-secondary-fg);
-      border-color: var(--hero-badge-border);
-      backdrop-filter: blur(16px);
-      -webkit-backdrop-filter: blur(16px);
+      background: var(--sphere-glass);
+      color: var(--sphere-ink);
+      border-color: var(--sphere-glass-border);
+      backdrop-filter: blur(18px) saturate(1.6);
+      -webkit-backdrop-filter: blur(18px) saturate(1.6);
     }
     .hero-cta:hover {
       transform: translateY(-1px);
     }
 
+    .hero-cards {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(170px, 220px));
+      gap: 12px;
+      max-width: 700px;
+    }
+
+    .hero-card {
+      text-align: left;
+      padding: 14px 16px;
+      border-radius: 16px;
+      background: var(--sphere-glass);
+      border: 1px solid var(--sphere-glass-border);
+      backdrop-filter: blur(22px) saturate(1.7);
+      -webkit-backdrop-filter: blur(22px) saturate(1.7);
+      color: var(--sphere-ink);
+      transition: all 0.25s ease;
+    }
+    .hero-card-title {
+      font-size: 13px;
+      font-weight: 650;
+      margin-bottom: 4px;
+      letter-spacing: -0.01em;
+    }
+    .hero-card-copy {
+      font-size: 11.5px;
+      line-height: 1.42;
+      color: var(--sphere-ink-muted);
+    }
+
+    /* =========================================================================
+       CONTEXT MODE 3: Wallpaper Frame Preview (`data-preview="wallpaper"`)
+       macOS Sequoia Menu Bar + iPhone Lock Screen Clock Overlay
+       ========================================================================= */
+    .wallpaper-preview {
+      position: fixed;
+      inset: 0;
+      z-index: 12;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.28s ease;
+    }
+
+    body[data-preview="wallpaper"] .wallpaper-preview {
+      opacity: 1;
+    }
+
+    .macos-menubar {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 28px;
+      padding: 0 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: var(--sphere-glass);
+      border-bottom: 1px solid var(--sphere-glass-border);
+      backdrop-filter: blur(24px) saturate(1.8);
+      -webkit-backdrop-filter: blur(24px) saturate(1.8);
+      color: var(--sphere-ink);
+      font-size: 12.5px;
+      font-weight: 560;
+    }
+
+    .macos-menubar-left, .macos-menubar-right {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .iphone-lockscreen {
+      position: absolute;
+      top: 13vh;
+      left: 50%;
+      transform: translateX(-50%);
+      text-align: center;
+      color: var(--sphere-ink);
+      display: none;
+    }
+
+    body[data-wallpaper-device="mobile"] .macos-menubar {
+      display: none;
+    }
+    body[data-wallpaper-device="mobile"] .iphone-lockscreen {
+      display: block;
+    }
+
+    .iphone-date {
+      font-size: 18px;
+      font-weight: 600;
+      letter-spacing: -0.01em;
+      opacity: 0.85;
+      margin-bottom: 2px;
+    }
+
+    .iphone-clock {
+      font-size: 92px;
+      font-weight: 740;
+      line-height: 0.95;
+      letter-spacing: -0.03em;
+      font-variant-numeric: tabular-nums;
+      opacity: 0.90;
+    }
+
+    /* Bottom Floating Studio Dock */
     .dock-wrap {
       position: fixed;
       bottom: 20px;
@@ -326,7 +474,7 @@
       align-items: center;
       flex-wrap: wrap;
       justify-content: center;
-      gap: 8px;
+      gap: 7px;
       padding: 8px 10px;
       border-radius: 22px;
       background: var(--hud-bg);
@@ -343,10 +491,10 @@
       background: #ffffff;
       color: #090d16;
       font-family: var(--font-sans);
-      font-weight: 650;
+      font-weight: 660;
       font-size: 13px;
       letter-spacing: -0.01em;
-      padding: 9px 15px;
+      padding: 9px 14px;
       border-radius: 14px;
       cursor: pointer;
       display: inline-flex;
@@ -361,6 +509,29 @@
     }
     .btn-generate:active {
       transform: scale(0.96);
+    }
+
+    .btn-embed-cta {
+      appearance: none;
+      border: 1px solid rgba(110, 231, 183, 0.38);
+      background: rgba(16, 185, 129, 0.18);
+      color: #a7f3d0;
+      height: 34px;
+      padding: 0 12px;
+      border-radius: 12px;
+      font-family: var(--font-sans);
+      font-size: 12.5px;
+      font-weight: 620;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: background 0.15s ease, transform 0.1s ease;
+      white-space: nowrap;
+    }
+    .btn-embed-cta:hover {
+      background: rgba(16, 185, 129, 0.28);
+      color: #ffffff;
     }
 
     .kbd {
@@ -382,13 +553,13 @@
       padding: 0 11px;
       border-radius: 12px;
       font-family: var(--font-sans);
-      font-size: 12.5px;
-      font-weight: 550;
+      font-size: 12px;
+      font-weight: 560;
       cursor: pointer;
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      gap: 6px;
+      gap: 5px;
       transition: background 0.15s ease, border-color 0.15s ease, transform 0.1s ease;
       white-space: nowrap;
     }
@@ -424,7 +595,7 @@
       font-family: var(--font-sans);
       font-size: 12px;
       font-weight: 560;
-      padding: 6px 10px;
+      padding: 6px 9px;
       border-radius: 10px;
       cursor: pointer;
       transition: color 0.15s ease, background 0.15s ease;
@@ -447,15 +618,15 @@
       border: 1px solid rgba(255, 255, 255, 0.10);
       border-radius: 12px;
       height: 34px;
-      padding: 0 28px 0 11px;
+      padding: 0 26px 0 10px;
       font-family: var(--font-sans);
       font-size: 12px;
       font-weight: 550;
       cursor: pointer;
       background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath fill='white' fill-opacity='0.75' d='M1 1l4 4 4-4' stroke='white' stroke-width='1.4' stroke-linecap='round' fill='none'/%3E%3C/svg%3E");
       background-repeat: no-repeat;
-      background-position: right 10px center;
-      max-width: 195px;
+      background-position: right 9px center;
+      max-width: 182px;
       text-overflow: ellipsis;
     }
 
@@ -511,10 +682,11 @@
       opacity: 1;
     }
 
+    /* Modals (Embed Integration + Shortcuts) */
     .modal-backdrop {
       position: fixed;
       inset: 0;
-      background: rgba(4, 7, 15, 0.55);
+      background: rgba(4, 7, 15, 0.58);
       backdrop-filter: blur(12px);
       -webkit-backdrop-filter: blur(12px);
       z-index: 50;
@@ -533,8 +705,8 @@
 
     .modal {
       width: 100%;
-      max-width: 660px;
-      background: rgba(15, 20, 32, 0.95);
+      max-width: 700px;
+      background: rgba(15, 20, 32, 0.96);
       border: 1px solid rgba(255, 255, 255, 0.16);
       border-radius: 22px;
       padding: 24px;
@@ -547,17 +719,17 @@
       display: flex;
       align-items: center;
       justify-content: space-between;
-      margin-bottom: 12px;
+      margin-bottom: 10px;
     }
 
     .modal-title {
       font-size: 17px;
-      font-weight: 650;
+      font-weight: 660;
       letter-spacing: -0.02em;
     }
 
     .modal-desc {
-      font-size: 13.5px;
+      font-size: 13px;
       color: rgba(255, 255, 255, 0.68);
       line-height: 1.5;
       margin-bottom: 14px;
@@ -571,17 +743,18 @@
     }
 
     .code-box {
-      background: rgba(0, 0, 0, 0.45);
+      background: rgba(0, 0, 0, 0.48);
       border: 1px solid rgba(255, 255, 255, 0.10);
       border-radius: 14px;
-      padding: 16px;
+      padding: 15px 16px;
       font-family: var(--font-mono);
-      font-size: 12px;
-      line-height: 1.58;
+      font-size: 11.8px;
+      line-height: 1.56;
       color: #e2e8f0;
       overflow-x: auto;
       white-space: pre;
       margin-bottom: 16px;
+      max-height: 310px;
     }
 
     .modal-footer {
@@ -592,10 +765,39 @@
       gap: 10px;
     }
 
+    .shortcut-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 10px 18px;
+      font-size: 13px;
+      margin-top: 8px;
+    }
+
+    .shortcut-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 6px 0;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      color: rgba(255, 255, 255, 0.82);
+    }
+
+    .shortcut-key {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      padding: 3px 7px;
+      border-radius: 6px;
+      background: rgba(255, 255, 255, 0.12);
+      color: #fff;
+    }
+
     @media (max-width: 900px) {
       .top-bar {
         flex-direction: column;
         align-items: flex-start;
+      }
+      .hero-cards {
+        display: none;
       }
       .dock {
         border-radius: 18px;
@@ -604,9 +806,10 @@
     }
   </style>
 </head>
-<body data-canvas-theme="light">
-  <canvas id="sphere-canvas" title="Click anywhere or press Space for a new wallpaper / background"></canvas>
+<body data-canvas-theme="light" data-preview="canvas" data-wallpaper-device="desktop">
+  <canvas id="sphere-canvas" title="Click anywhere or press Space for a fresh studio canvas"></canvas>
 
+  <!-- Top Telemetry & Active Palette Bar -->
   <header class="top-bar">
     <div class="glass-pill">
       <span class="brand-dot"></span>
@@ -614,40 +817,82 @@
       <span class="sep"></span>
       <span class="perf-readout" id="perf-readout">Compiling WebGL2…</span>
       <span class="sep"></span>
-      <a class="top-link" href="https://github.com/denissitnikov/sphere-gl" target="_blank" rel="noopener" title="Open-source MIT repo on GitHub">GitHub ★</a>
+      <a class="top-link" href="https://github.com/denissitnikov/sphere-gl" target="_blank" rel="noopener" title="Star sphere-gl on GitHub (MIT)">GitHub ★</a>
       <span class="sep"></span>
-      <a class="top-link" href="https://slidetab.app" target="_blank" rel="noopener" title="Built by the maker of SlideTab for macOS">by SlideTab</a>
+      <a class="top-link" href="https://slidetab.app" target="_blank" rel="noopener" title="Created by Denis S. — Maker of SlideTab for macOS">by SlideTab</a>
+      <span class="sep"></span>
+      <button class="top-link" id="help-btn" title="Keyboard shortcuts (?)">?</button>
     </div>
 
     <div class="glass-pill">
       <div class="swatches" id="palette-swatches" title="Click a swatch to copy its HEX color"></div>
       <span class="sep"></span>
       <span class="archetype-label" id="archetype-label">—</span>
-      <button class="seed-btn" id="copy-seed-btn" title="Copy shareable link to this exact seed">
+      <button class="seed-btn" id="copy-seed-btn" title="Copy Studio Preset URL for this exact seed">
         <span id="seed-label">#------</span>
         <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
       </button>
     </div>
   </header>
 
-  <section class="hero-preview" id="hero-preview" aria-hidden="true">
+  <!-- Context Preview 2: Live Adaptive Website Hero (`2` or `Website` button) -->
+  <section class="website-preview" id="website-preview" aria-hidden="true">
     <div class="hero-eyebrow">
-      <span id="hero-tag-mode">sphere-gl • Procedural WebGL2 + OKLCH</span>
+      <span class="hero-eyebrow-dot"></span>
+      <span id="hero-tag-mode">Auto-adaptive `--sphere-ink` &amp; `--sphere-glass` CSS tokens</span>
     </div>
-    <h1 class="hero-headline">Every visit renders a one-of-a-kind canvas.</h1>
+    <h1 class="hero-headline">A fresh studio canvas on every visit.</h1>
     <p class="hero-sub">
-      19 KB gzipped, zero dependencies. Diffused macro spheres &amp; liquid mesh gradients synthesized directly on the GPU in under a millisecond.
+      22 KB gzip, zero dependencies. Synthesizes never-muddy OKLCH spheres &amp; meshes in &lt;1 ms GPU, while automatically adapting your UI contrast.
     </p>
     <div class="hero-actions">
-      <button class="hero-cta primary" id="hero-gen-btn">New Palette (Space)</button>
-      <button class="hero-cta secondary" id="hero-code-btn">Add to Your Website</button>
+      <button class="hero-cta primary" id="hero-gen-btn">Roll New Palette (Space)</button>
+      <button class="hero-cta secondary" id="hero-code-btn">&lt;/&gt; Copy Embed Snippet</button>
+    </div>
+    <div class="hero-cards">
+      <div class="hero-card">
+        <div class="hero-card-title">Never Muddy</div>
+        <div class="hero-card-copy">Analytical OKLab scatter lift bridges opposing blues &amp; oranges cleanly.</div>
+      </div>
+      <div class="hero-card">
+        <div class="hero-card-title">0% Idle Battery</div>
+        <div class="hero-card-copy">Draws 1 Retina frame in ~0.8 ms GPU and sleeps—or drifts at 60fps.</div>
+      </div>
+      <div class="hero-card">
+        <div class="hero-card-title">HTML · CSS · React · Framer</div>
+        <div class="hero-card-copy">Drop in 2 lines of HTML, CSS variables, or paste any Studio URL.</div>
+      </div>
     </div>
   </section>
 
+  <!-- Context Preview 3: Wallpaper Device Frame (`3` or `Wallpaper` button) -->
+  <section class="wallpaper-preview" id="wallpaper-preview" aria-hidden="true">
+    <div class="macos-menubar">
+      <div class="macos-menubar-left">
+        <span style="font-size:14px;"></span>
+        <strong>Finder</strong>
+        <span>File</span>
+        <span>Edit</span>
+        <span>View</span>
+        <span>Window</span>
+      </div>
+      <div class="macos-menubar-right">
+        <span>Wi-Fi</span>
+        <span>100%</span>
+        <span id="macos-clock">Sun Nov 8  9:41 PM</span>
+      </div>
+    </div>
+    <div class="iphone-lockscreen">
+      <div class="iphone-date">Sunday, November 8</div>
+      <div class="iphone-clock">9:41</div>
+    </div>
+  </section>
+
+  <!-- Bottom Floating Studio Dock -->
   <div class="dock-wrap">
     <div class="dock">
       <button class="icon-btn" id="prev-btn" title="Previous seed (←)" disabled aria-label="Previous seed">←</button>
-      <button class="btn-generate" id="generate-btn" title="Generate new wallpaper / background (Space or Click canvas)">
+      <button class="btn-generate" id="generate-btn" title="Generate new canvas (Space or Click)">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="7.5 4.21 12 6.81 16.5 4.21"/><polyline points="7.5 19.79 7.5 14.6 3 12"/><polyline points="21 12 16.5 14.6 16.5 19.79"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
         New Color
         <span class="kbd">Space</span>
@@ -656,13 +901,15 @@
 
       <span class="sep"></span>
 
+      <!-- Geometry Style -->
       <div class="seg-group" role="group" aria-label="Geometry style" id="style-group">
         <button class="seg-btn" data-style="auto">Auto</button>
         <button class="seg-btn" data-style="mesh" title="Organic Watercolor Mesh">Mesh</button>
-        <button class="seg-btn active" data-style="sphere" title="Diffused Macro Planetary Spheres">Sphere</button>
+        <button class="seg-btn active" data-style="sphere" title="Diffused f/0.95 Macro Spheres">Sphere</button>
         <button class="seg-btn" data-style="silk" title="Sculpted Satin Ribbon Folds">Silk</button>
       </div>
 
+      <!-- Palette Mood -->
       <div class="seg-group" role="group" aria-label="Palette mood" id="mood-group">
         <button class="seg-btn active" data-mood="auto">Auto</button>
         <button class="seg-btn" data-mood="light">Light</button>
@@ -670,68 +917,110 @@
         <button class="seg-btn" data-mood="dark">Dark</button>
       </div>
 
+      <!-- Harmony Selector -->
       <select class="studio-select" id="archetype-select" aria-label="Color harmony archetype">
-        <option value="auto">All Studio Harmonies</option>
+        <option value="auto">All Harmonies</option>
       </select>
 
       <span class="sep"></span>
 
       <button class="icon-btn" id="grain-btn" title="Cycle film grain intensity (G)">Grain: Editorial</button>
-      <button class="icon-btn" id="motion-btn" title="Toggle subtle 60fps ambient drift vs 0%-idle static frame (M)">Static 0%</button>
-      <button class="icon-btn" id="hero-toggle-btn" title="Preview website hero typography overlay (T)">Hero UI</button>
+      <button class="icon-btn" id="motion-btn" title="Toggle 60fps drift vs 0% static frame (M)">Static 0%</button>
 
-      <div class="export-group">
-        <select class="studio-select" id="res-select" aria-label="Wallpaper resolution" style="max-width: 142px;">
-          <option value="3840x2160">4K UHD (16:9)</option>
-          <option value="5120x2880">5K Studio Display</option>
-          <option value="3456x2234">MacBook Pro 16"</option>
-          <option value="5120x2160">Ultrawide (21:9)</option>
-          <option value="1320x2868">iPhone Pro</option>
-        </select>
-        <button class="icon-btn" id="export-btn" title="Download high-res PNG wallpaper (E)">Download PNG</button>
+      <!-- 3-Way Context Switcher: Canvas | Website | Wallpaper -->
+      <div class="seg-group" role="group" aria-label="Preview overlay" id="preview-group">
+        <button class="seg-btn active" data-prev="canvas" title="Pure Canvas (1)">Canvas</button>
+        <button class="seg-btn" data-prev="website" title="Preview Adaptive Website Hero UI (2 or T)">Website</button>
+        <button class="seg-btn" data-prev="wallpaper" title="Preview macOS / iPhone Frame (3)">OS Frame</button>
       </div>
 
-      <button class="icon-btn" id="code-btn" title="Embed sphere-gl on any website">&lt;/&gt; Embed</button>
-      <button class="icon-btn" id="hide-ui-btn" title="Hide controls for pure full-screen view (H)">Hide</button>
+      <div class="export-group">
+        <select class="studio-select" id="res-select" aria-label="Wallpaper resolution" style="max-width: 138px;">
+          <option value="3840x2160" data-dev="desktop">4K UHD</option>
+          <option value="5120x2880" data-dev="desktop">5K Studio</option>
+          <option value="3456x2234" data-dev="desktop">MacBook 16"</option>
+          <option value="5120x2160" data-dev="desktop">Ultrawide</option>
+          <option value="1320x2868" data-dev="mobile">iPhone Pro</option>
+        </select>
+        <button class="icon-btn" id="export-btn" title="Download high-res PNG wallpaper (E)">PNG ↓</button>
+      </div>
+
+      <button class="btn-embed-cta" id="code-btn" title="Use on your website: HTML, CSS, React, Framer">&lt;/&gt; Use Free</button>
+      <button class="icon-btn" id="hide-ui-btn" title="Hide UI (H)">Hide</button>
     </div>
   </div>
 
   <button class="glass-pill unhide-pill" id="unhide-btn" style="cursor:pointer;">Show Studio (H)</button>
-
   <div class="toast" id="toast">Copied!</div>
 
+  <!-- Multi-Framework Integration Modal -->
   <div class="modal-backdrop" id="code-modal">
     <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
       <div class="modal-header">
-        <div class="modal-title" id="modal-title">Add sphere-gl to Any Website (19 KB gzip · Zero Dependencies)</div>
+        <div class="modal-title" id="modal-title">Add sphere-gl to Your Website (22 KB gzip · MIT · Zero Deps)</div>
         <button class="icon-btn" id="close-modal-btn">✕</button>
       </div>
       <p class="modal-desc">
-        Synthesizes a Retina WebGL2 background in <strong>~0.8 ms</strong> on load and drops to <strong>0% idle CPU/GPU</strong>. Automatically sets <code>data-sphere-theme="light|dark"</code> so your text &amp; glass UI adapt cleanly.
+        Synthesizes a Retina WebGL2 canvas in <strong>~0.8 ms</strong> (`0%` idle GPU) and automatically sets <code>data-sphere-theme="light|dark"</code> + <code>--sphere-ink</code> / <code>--sphere-glass</code> tokens on your container.
       </p>
       <div class="modal-controls">
         <div class="seg-group" id="snippet-api-group">
-          <button class="seg-btn active" data-api="html">Zero-JS HTML Attributes (CSP-Safe)</button>
-          <button class="seg-btn" data-api="esm">ES Module JS</button>
+          <button class="seg-btn active" data-api="html">2-Line HTML</button>
+          <button class="seg-btn" data-api="css">CSS Variables</button>
+          <button class="seg-btn" data-api="react">React / Next.js</button>
+          <button class="seg-btn" data-api="framer">Framer</button>
+          <button class="seg-btn" data-api="url">Preset URL</button>
         </div>
         <div class="seg-group" id="snippet-mode-group">
-          <button class="seg-btn active" data-snip="random">Fresh Color Each Visit</button>
-          <button class="seg-btn" data-snip="locked">Lock Current Seed</button>
+          <button class="seg-btn active" data-snip="random">Fresh Each Visit</button>
+          <button class="seg-btn" data-snip="locked">Lock Seed</button>
+          <button class="seg-btn" data-snip="custom">Custom Hexes</button>
         </div>
       </div>
       <pre class="code-box" id="snippet-code"></pre>
       <div class="modal-footer">
-        <a class="top-link" href="https://github.com/denissitnikov/sphere-gl" target="_blank" rel="noopener">View full docs &amp; self-hosting guide on GitHub →</a>
-        <button class="btn-generate" id="copy-snippet-btn">Copy Snippet</button>
+        <a class="top-link" href="https://github.com/denissitnikov/sphere-gl" target="_blank" rel="noopener">Full docs, npm &amp; CSP self-hosting guide on GitHub →</a>
+        <button class="btn-generate" id="copy-snippet-btn">Copy Code</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Keyboard Shortcuts Modal -->
+  <div class="modal-backdrop" id="help-modal">
+    <div class="modal" style="max-width: 480px;" role="dialog" aria-modal="true">
+      <div class="modal-header">
+        <div class="modal-title">Studio Keyboard Shortcuts</div>
+        <button class="icon-btn" id="close-help-btn">✕</button>
+      </div>
+      <div class="shortcut-grid">
+        <div class="shortcut-row"><span>New Palette</span><span class="shortcut-key">Space / Click</span></div>
+        <div class="shortcut-row"><span>Seed History</span><span class="shortcut-key">← / →</span></div>
+        <div class="shortcut-row"><span>Pure Canvas</span><span class="shortcut-key">1</span></div>
+        <div class="shortcut-row"><span>Website UI Preview</span><span class="shortcut-key">2 / T</span></div>
+        <div class="shortcut-row"><span>OS Wallpaper Frame</span><span class="shortcut-key">3</span></div>
+        <div class="shortcut-row"><span>Cycle Film Grain</span><span class="shortcut-key">G</span></div>
+        <div class="shortcut-row"><span>Toggle 60fps Drift</span><span class="shortcut-key">M</span></div>
+        <div class="shortcut-row"><span>Download PNG</span><span class="shortcut-key">E</span></div>
+        <div class="shortcut-row"><span>Hide All UI</span><span class="shortcut-key">H</span></div>
+        <div class="shortcut-row"><span>Embed Code</span><span class="shortcut-key">C</span></div>
       </div>
     </div>
   </div>
 
   <script type="module">
-    import { SphereRenderer, ARCHETYPES, generateScene, randomSeed } from './src/index.js';
+    import {
+      SphereRenderer,
+      ARCHETYPES,
+      generateScene,
+      randomSeed,
+      parsePresetUrl,
+      formatPresetUrl,
+    } from './src/index.js';
 
-    const CDN_SCRIPT = 'https://cdn.jsdelivr.net/gh/denissitnikov/sphere-gl@v1.0.0/dist/sphere-gl.min.js';
-    const CDN_ESM = 'https://cdn.jsdelivr.net/gh/denissitnikov/sphere-gl@v1.0.0/dist/sphere-gl.esm.min.js';
+    const VERSION = 'v1.1.0';
+    const CDN_SCRIPT = `https://cdn.jsdelivr.net/gh/denissitnikov/sphere-gl@${VERSION}/dist/sphere-gl.min.js`;
+    const CDN_ESM = `https://cdn.jsdelivr.net/gh/denissitnikov/sphere-gl@${VERSION}/dist/sphere-gl.esm.min.js`;
+    const CDN_FRAMER = `https://cdn.jsdelivr.net/gh/denissitnikov/sphere-gl@${VERSION}/dist/sphere-gl.framer.js`;
 
     const canvas = document.getElementById('sphere-canvas');
     const perfReadout = document.getElementById('perf-readout');
@@ -744,10 +1033,10 @@
     const nextBtn = document.getElementById('next-btn');
     const grainBtn = document.getElementById('grain-btn');
     const motionBtn = document.getElementById('motion-btn');
-    const heroToggleBtn = document.getElementById('hero-toggle-btn');
     const exportBtn = document.getElementById('export-btn');
     const toastEl = document.getElementById('toast');
     const codeModal = document.getElementById('code-modal');
+    const helpModal = document.getElementById('help-modal');
     const snippetCode = document.getElementById('snippet-code');
     const heroTagMode = document.getElementById('hero-tag-mode');
 
@@ -821,20 +1110,37 @@
     });
 
     function syncUrlHash(scene) {
+      const grainScale = GRAIN_PRESETS[grainIdx].scale;
       const params = new URLSearchParams();
       params.set('seed', scene.seed);
       params.set('style', scene.style);
       params.set('mood', scene.mood);
-      if (scene.archetypeId) params.set('arch', scene.archetypeId);
+      if (scene.archetypeId && scene.archetypeId !== 'custom-palette') {
+        params.set('arch', scene.archetypeId);
+      }
+      params.set('grain', String(grainScale));
+      if (motionEnabled) params.set('motion', '1');
       window.history.replaceState(null, '', `#${params.toString()}`);
     }
 
+    function applyAdaptiveTokensToBody(scene) {
+      const t = scene.uiTokens;
+      document.body.dataset.canvasTheme = t.theme;
+      document.body.style.setProperty('--sphere-base', scene.baseHex);
+      document.body.style.setProperty('--sphere-bloom', scene.bloomHex);
+      document.body.style.setProperty('--sphere-accent', t.accent);
+      document.body.style.setProperty('--sphere-ink', t.ink);
+      document.body.style.setProperty('--sphere-ink-muted', t.inkMuted);
+      document.body.style.setProperty('--sphere-glass', t.glass);
+      document.body.style.setProperty('--sphere-glass-border', t.glassBorder);
+    }
+
     function updateUIForScene(scene) {
-      document.body.dataset.canvasTheme = scene.isDark ? 'dark' : 'light';
+      applyAdaptiveTokensToBody(scene);
       const stylePretty = scene.style.charAt(0).toUpperCase() + scene.style.slice(1);
       archetypeLabel.textContent = `${scene.archetypeName} · ${stylePretty}`;
       seedLabel.textContent = `#${scene.seed}`;
-      heroTagMode.textContent = `${scene.archetypeName} • ${stylePretty} • Seed #${scene.seed}`;
+      heroTagMode.textContent = `${scene.archetypeName} • ${stylePretty} • Theme: ${scene.uiTokens.theme.toUpperCase()}`;
 
       swatchesEl.innerHTML = '';
       for (const hex of scene.paletteSwatches) {
@@ -878,6 +1184,7 @@
         style: overrides.style ?? styleFilter,
         mood: overrides.mood ?? moodFilter,
         archetype: overrides.archetype ?? archetypeFilter,
+        colors: overrides.colors ?? null,
       });
 
       if (historyIndex < history.length - 1) {
@@ -892,28 +1199,34 @@
     }
 
     function initFromUrlOrDefault() {
-      const hash = window.location.hash.replace(/^#/, '');
-      if (hash) {
-        const params = new URLSearchParams(hash);
-        const seed = params.get('seed');
-        const st = params.get('style');
-        const md = params.get('mood');
-        const arch = params.get('arch');
-        if (seed) {
-          if (st) {
-            styleFilter = st;
-            for (const b of document.querySelectorAll('[data-style]')) {
-              b.classList.toggle('active', b.dataset.style === st);
-            }
+      const parsed = parsePresetUrl(window.location.href);
+      if (parsed.seed || parsed.style || parsed.colors) {
+        if (parsed.style) {
+          styleFilter = parsed.style;
+          for (const b of document.querySelectorAll('[data-style]')) {
+            b.classList.toggle('active', b.dataset.style === parsed.style);
           }
-          pushNewScene({
-            seed,
-            style: st || 'auto',
-            mood: md || 'auto',
-            archetype: arch || 'auto',
-          });
-          return;
         }
+        if (parsed.grain !== undefined) {
+          const matchIdx = GRAIN_PRESETS.findIndex((p) => Math.abs(p.scale - parsed.grain) < 0.1);
+          if (matchIdx >= 0) {
+            grainIdx = matchIdx;
+            grainBtn.textContent = GRAIN_PRESETS[grainIdx].label;
+          }
+        }
+        if (parsed.motion) {
+          motionEnabled = true;
+          motionBtn.textContent = 'Drift 60fps';
+          motionBtn.classList.add('active');
+        }
+        pushNewScene({
+          seed: parsed.seed,
+          style: parsed.style || 'sphere',
+          mood: parsed.mood || 'auto',
+          archetype: parsed.harmony || 'auto',
+          colors: parsed.colors || null,
+        });
+        return;
       }
       pushNewScene();
     }
@@ -1016,11 +1329,24 @@
     }
     motionBtn.addEventListener('click', toggleMotion);
 
-    function toggleHero() {
-      const on = document.body.classList.toggle('show-hero');
-      heroToggleBtn.classList.toggle('active', on);
+    // 3-Mode Context Preview Switcher
+    function setPreviewMode(mode) {
+      document.body.dataset.preview = mode;
+      for (const b of document.querySelectorAll('[data-prev]')) {
+        b.classList.toggle('active', b.dataset.prev === mode);
+      }
     }
-    heroToggleBtn.addEventListener('click', toggleHero);
+
+    document.getElementById('preview-group').addEventListener('click', (e) => {
+      const btn = e.target.closest('[data-prev]');
+      if (!btn) return;
+      setPreviewMode(btn.dataset.prev);
+    });
+
+    resSelect.addEventListener('change', () => {
+      const opt = resSelect.selectedOptions[0];
+      document.body.dataset.wallpaperDevice = opt?.dataset.dev || 'desktop';
+    });
 
     function toggleUiHidden() {
       document.body.classList.toggle('ui-hidden');
@@ -1030,7 +1356,7 @@
 
     document.getElementById('copy-seed-btn').addEventListener('click', () => {
       navigator.clipboard?.writeText(window.location.href);
-      showToast(`Copied link for seed #${currentScene.seed}`);
+      showToast(`Copied Studio Preset URL for #${currentScene.seed}`);
     });
 
     async function downloadWallpaper() {
@@ -1039,7 +1365,7 @@
       const width = Number(wStr) || 3840;
       const height = Number(hStr) || 2160;
       const origText = exportBtn.textContent;
-      exportBtn.textContent = 'Rendering…';
+      exportBtn.textContent = '…';
       exportBtn.disabled = true;
       try {
         const t0 = performance.now();
@@ -1074,34 +1400,88 @@
       const st = snippetMode === 'locked' ? currentScene.style : styleFilter;
       const md = snippetMode === 'locked' ? currentScene.mood : moodFilter;
       const ar = snippetMode === 'locked' ? currentScene.archetypeId : archetypeFilter;
+      const sw = currentScene.paletteSwatches;
+      const presetLink = formatPresetUrl(currentScene, {
+        grain: grainScale,
+        motion: motionEnabled,
+        lockSeed: snippetMode !== 'random',
+        colors: snippetMode === 'custom' ? sw.slice(0, 4) : null,
+      });
 
       if (snippetApi === 'html') {
         const seedAttr = snippetMode === 'locked' ? `\n  data-sphere-seed="${currentScene.seed}"` : '';
-        const archAttr = ar !== 'auto' ? `\n  data-sphere-harmony="${ar}"` : '';
+        const colorsAttr = snippetMode === 'custom' ? `\n  data-sphere-colors="${sw.slice(0, 4).join(',')}"` : '';
+        const archAttr = snippetMode !== 'custom' && ar !== 'auto' ? `\n  data-sphere-harmony="${ar}"` : '';
         const motionAttr = motionEnabled ? `\n  data-sphere-motion="true"` : '';
-        snippetCode.textContent = `<!-- Zero inline JS needed — works even with strict CSP (when self-hosted) -->
+        snippetCode.textContent = `<!-- Zero inline JS · Strict-CSP safe when self-hosted -->
 <body
-  data-sphere-bg${seedAttr}
+  data-sphere-bg
+  data-transition-in${seedAttr}${colorsAttr}
   data-sphere-style="${st}"
   data-sphere-mood="${md}"${archAttr}
   data-sphere-grain="${grainScale}"${motionAttr}
 >
-  <!-- Your website content -->
+  <h1 style="color: var(--sphere-ink)">Hello World</h1>
   <script src="${CDN_SCRIPT}" defer><\/script>
 </body>`;
-      } else {
-        const seedLine = snippetMode === 'locked' ? `\n    seed: '${currentScene.seed}',` : '';
-        const archLine = ar !== 'auto' ? `\n    harmony: '${ar}',` : '';
-        snippetCode.textContent = `<script type="module">
-  import { mountSphereBackground } from '${CDN_ESM}';
+      } else if (snippetApi === 'css') {
+        const customVars =
+          snippetMode === 'custom'
+            ? `  /* Custom palette rendered in OKLab with anti-muddy scatter lift */\n  --sphere-color-1: ${sw[0]};\n  --sphere-color-2: ${sw[1]};\n  --sphere-color-3: ${sw[2]};\n  --sphere-color-4: ${sw[3] || sw[1]};\n`
+            : `  /* Leave --sphere-color-* unset for fresh OKLCH harmony every visit! */\n`;
+        snippetCode.textContent = `/* Configure via CSS variables (whatamesh-style) & consume adaptive UI tokens */
+#hero {
+${customVars}  --sphere-style: ${st};
+  --sphere-grain: ${grainScale};
+  color: var(--sphere-ink);
+}
 
-  const bg = mountSphereBackground(document.body, {${seedLine}
-    style: '${st}',
-    mood: '${md}',${archLine}
-    grain: ${grainScale},
-    motion: ${motionEnabled},
-  });
-<\/script>`;
+#hero .glass-card {
+  background: var(--sphere-glass);
+  border: 1px solid var(--sphere-glass-border);
+  backdrop-filter: blur(24px);
+}
+
+<!-- HTML -->
+<section id="hero" data-sphere-bg data-transition-in>...</section>
+<script src="${CDN_SCRIPT}" defer><\/script>`;
+      } else if (snippetApi === 'react') {
+        const propLines =
+          snippetMode === 'locked'
+            ? `url="${presetLink}"`
+            : snippetMode === 'custom'
+              ? `mode="${st}"\n      colors={${JSON.stringify(sw.slice(0, 4))}}\n      grain={${grainScale}}`
+              : `mode="${st}"\n      mood="${md}"\n      grain={${grainScale}}`;
+        snippetCode.textContent = `// npm install sphere-gl
+import { SphereBackground } from 'sphere-gl/react';
+
+export function Hero() {
+  return (
+    <SphereBackground
+      ${propLines}
+      motion={${motionEnabled}}
+      style={{ minHeight: '100vh', color: 'var(--sphere-ink)' }}
+    >
+      <h1>Every visit renders a fresh canvas.</h1>
+    </SphereBackground>
+  );
+}`;
+      } else if (snippetApi === 'framer') {
+        snippetCode.textContent = `// In Framer: Assets → Code → Create Code File (or Import from URL)
+// Paste this 2-line re-export to get native Framer right-sidebar controls:
+
+export { default } from "${CDN_FRAMER}"
+
+// Tip: Set Palette → "Studio URL" in Framer's sidebar and paste:
+// ${presetLink}`;
+      } else {
+        snippetCode.textContent = `/* Paste this Studio Preset URL into HTML, React, or Framer: */
+${presetLink}
+
+<!-- HTML Preset URL Shorthand -->
+<body data-sphere-bg data-sphere-preset="${presetLink}">
+  <script src="${CDN_SCRIPT}" defer><\/script>
+</body>`;
       }
     }
 
@@ -1114,6 +1494,12 @@
     document.getElementById('close-modal-btn').addEventListener('click', () => codeModal.classList.remove('open'));
     codeModal.addEventListener('click', (e) => {
       if (e.target === codeModal) codeModal.classList.remove('open');
+    });
+
+    document.getElementById('help-btn').addEventListener('click', () => helpModal.classList.add('open'));
+    document.getElementById('close-help-btn').addEventListener('click', () => helpModal.classList.remove('open'));
+    helpModal.addEventListener('click', (e) => {
+      if (e.target === helpModal) helpModal.classList.remove('open');
     });
 
     document.getElementById('snippet-api-group').addEventListener('click', (e) => {
@@ -1138,16 +1524,17 @@
 
     document.getElementById('copy-snippet-btn').addEventListener('click', () => {
       navigator.clipboard?.writeText(snippetCode.textContent);
-      showToast('Copied embed snippet!');
+      showToast('Copied integration snippet!');
     });
 
     window.addEventListener('keydown', (e) => {
       if (e.target.matches('select, input, textarea')) return;
-      if (e.key === 'Escape' && codeModal.classList.contains('open')) {
+      if (e.key === 'Escape') {
         codeModal.classList.remove('open');
+        helpModal.classList.remove('open');
         return;
       }
-      if (codeModal.classList.contains('open')) return;
+      if (codeModal.classList.contains('open') || helpModal.classList.contains('open')) return;
 
       if (e.code === 'Space') {
         e.preventDefault();
@@ -1158,8 +1545,14 @@
       } else if (e.key === 'ArrowRight') {
         e.preventDefault();
         nextBtn.click();
-      } else if (e.key === 't' || e.key === 'T') {
-        toggleHero();
+      } else if (e.key === '1') {
+        setPreviewMode('canvas');
+      } else if (e.key === '2' || e.key === 't' || e.key === 'T') {
+        const next = document.body.dataset.preview === 'website' ? 'canvas' : 'website';
+        setPreviewMode(next);
+      } else if (e.key === '3') {
+        const next = document.body.dataset.preview === 'wallpaper' ? 'canvas' : 'wallpaper';
+        setPreviewMode(next);
       } else if (e.key === 'h' || e.key === 'H') {
         toggleUiHidden();
       } else if (e.key === 'm' || e.key === 'M') {
@@ -1168,6 +1561,10 @@
         cycleGrain();
       } else if (e.key === 'e' || e.key === 'E') {
         downloadWallpaper();
+      } else if (e.key === 'c' || e.key === 'C') {
+        openCodeModal();
+      } else if (e.key === '?') {
+        helpModal.classList.add('open');
       }
     });
 

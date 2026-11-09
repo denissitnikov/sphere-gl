@@ -468,6 +468,115 @@ export function oklabToSrgbHex(L, a, b) {
   return `#${byteToHex(linearToSrgbByte(r))}${byteToHex(linearToSrgbByte(g))}${byteToHex(linearToSrgbByte(bl))}`;
 }
 
+function srgbChannelToLinear(u8) {
+  const c = clamp(u8 / 255, 0, 1);
+  return c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+}
+
+/**
+ * Parses a CSS `#RGB`, `#RRGGBB`, or `rgb(r,g,b)` color string into `[r, g, b]` bytes (`0..255`),
+ * returning `null` if invalid.
+ */
+export function parseCssColorBytes(input) {
+  if (typeof input !== 'string') return null;
+  const s = input.trim();
+  if (!s) return null;
+
+  if (s.startsWith('#')) {
+    const hex = s.slice(1);
+    if (/^[0-9a-fA-F]{3}$/.test(hex)) {
+      return [
+        parseInt(hex[0] + hex[0], 16),
+        parseInt(hex[1] + hex[1], 16),
+        parseInt(hex[2] + hex[2], 16),
+      ];
+    }
+    if (/^[0-9a-fA-F]{6}([0-9a-fA-F]{2})?$/.test(hex)) {
+      return [
+        parseInt(hex.slice(0, 2), 16),
+        parseInt(hex.slice(2, 4), 16),
+        parseInt(hex.slice(4, 6), 16),
+      ];
+    }
+    return null;
+  }
+
+  const rgbMatch = s.match(/^rgba?\(\s*([\d.]+)\s*[,\s]\s*([\d.]+)\s*[,\s]\s*([\d.]+)/i);
+  if (rgbMatch) {
+    return [
+      clamp(Math.round(Number(rgbMatch[1])), 0, 255),
+      clamp(Math.round(Number(rgbMatch[2])), 0, 255),
+      clamp(Math.round(Number(rgbMatch[3])), 0, 255),
+    ];
+  }
+  return null;
+}
+
+/**
+ * Converts a CSS `#RRGGBB` / `#RGB` / `rgb(...)` string into perceptual OKLab `[L, a, b]`,
+ * returning `null` if invalid.
+ */
+export function srgbHexToOklab(colorStr) {
+  const bytes = parseCssColorBytes(colorStr);
+  if (!bytes) return null;
+
+  const r = srgbChannelToLinear(bytes[0]);
+  const g = srgbChannelToLinear(bytes[1]);
+  const b = srgbChannelToLinear(bytes[2]);
+
+  const l = 0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b;
+  const m = 0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b;
+  const s = 0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b;
+
+  const l_ = Math.cbrt(Math.max(0, l));
+  const m_ = Math.cbrt(Math.max(0, m));
+  const s_ = Math.cbrt(Math.max(0, s));
+
+  return [
+    0.2104542553 * l_ + 0.7936177850 * m_ - 0.0040720468 * s_,
+    1.9779984951 * l_ - 2.4285922050 * m_ + 0.4505937099 * s_,
+    0.0259040371 * l_ + 0.7827717662 * m_ - 0.8086757660 * s_,
+  ];
+}
+
+function oklabToOklchTuple([L, a, b]) {
+  const C = Math.hypot(a, b);
+  const h = C > 1e-5 ? wrapHue((Math.atan2(b, a) * 180) / Math.PI) : 0;
+  return [L, C, h];
+}
+
+function computeUiTokens(isDark, baseHex, poles, paletteSwatches) {
+  const rgb = parseCssColorBytes(baseHex) || (isDark ? [10, 15, 26] : [252, 250, 246]);
+  // Subtle hue-tinted frosted glass blended toward dark slate or pure white
+  const glassR = isDark ? Math.round(rgb[0] * 0.35 + 10 * 0.65) : Math.round(rgb[0] * 0.22 + 255 * 0.78);
+  const glassG = isDark ? Math.round(rgb[1] * 0.35 + 14 * 0.65) : Math.round(rgb[1] * 0.22 + 255 * 0.78);
+  const glassB = isDark ? Math.round(rgb[2] * 0.35 + 24 * 0.65) : Math.round(rgb[2] * 0.22 + 255 * 0.78);
+  const glassAlpha = isDark ? 0.50 : 0.60;
+
+  // Pick a vibrant, legible accent pole
+  let bestAccent = paletteSwatches[1] || paletteSwatches[0] || baseHex;
+  let bestScore = -1;
+  for (const p of poles) {
+    const chroma = Math.hypot(p.lab[1], p.lab[2]);
+    const contrastBias = isDark ? (p.lab[0] > 0.48 ? 1.2 : 0.7) : (p.lab[0] < 0.78 ? 1.2 : 0.75);
+    const score = chroma * contrastBias * p.weight;
+    if (score > bestScore) {
+      bestScore = score;
+      bestAccent = p.hex;
+    }
+  }
+
+  return {
+    theme: isDark ? 'dark' : 'light',
+    bg: baseHex,
+    ink: isDark ? '#FFFFFF' : '#0F172A',
+    inkMuted: isDark ? 'rgba(255, 255, 255, 0.70)' : 'rgba(15, 23, 42, 0.68)',
+    glass: `rgba(${glassR}, ${glassG}, ${glassB}, ${glassAlpha})`,
+    glassBorder: isDark ? 'rgba(255, 255, 255, 0.15)' : 'rgba(15, 23, 42, 0.10)',
+    accent: bestAccent,
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Perceptual Aesthetic Guardrails & Continuous Chord Generator ('harmonic-wild')
 // ---------------------------------------------------------------------------
@@ -984,6 +1093,7 @@ export function generateScene({
   style = 'auto',
   mood = 'auto',
   archetype = 'auto',
+  colors = null,
 } = {}) {
   const normalizedSeed =
     typeof seed === 'string' && seed.trim().length > 0
@@ -992,6 +1102,12 @@ export function generateScene({
 
   const rng = createRng(normalizedSeed);
 
+  // Parse optional custom brand hex/rgb colors (whatamesh-style CSS variable or JS array override)
+  const parsedCustomLabs = Array.isArray(colors)
+    ? colors.map(srgbHexToOklab).filter(Boolean)
+    : [];
+  const hasCustomPalette = parsedCustomLabs.length >= 2;
+
   const requestedMood = VALID_MOODS.includes(mood) ? mood : 'auto';
   const requestedStyle = VALID_STYLES.includes(style) ? style : 'auto';
 
@@ -999,14 +1115,24 @@ export function generateScene({
   let selectedMeta = null;
   let useWild = false;
 
-  if (archetype === 'harmonic-wild') {
-    useWild = true;
-  } else if (archetype && archetype !== 'auto') {
-    selectedMeta = ARCHETYPE_SPECS.find((a) => a.id === archetype) || null;
+  if (!hasCustomPalette) {
+    if (archetype === 'harmonic-wild') {
+      useWild = true;
+    } else if (archetype && archetype !== 'auto') {
+      selectedMeta = ARCHETYPE_SPECS.find((a) => a.id === archetype) || null;
+    }
   }
 
   let resolvedMood;
-  if (selectedMeta) {
+  if (hasCustomPalette) {
+    if (requestedMood !== 'auto') {
+      resolvedMood = requestedMood;
+    } else {
+      const avgCustomL =
+        parsedCustomLabs.reduce((acc, c) => acc + c[0], 0) / parsedCustomLabs.length;
+      resolvedMood = avgCustomL < 0.45 ? 'dark' : avgCustomL > 0.78 ? 'light' : 'split';
+    }
+  } else if (selectedMeta) {
     resolvedMood = selectedMeta.mood;
   } else if (requestedMood !== 'auto') {
     resolvedMood = requestedMood;
@@ -1014,7 +1140,7 @@ export function generateScene({
     resolvedMood = rng.pick(VALID_MOODS);
   }
 
-  if (!selectedMeta && !useWild) {
+  if (!hasCustomPalette && !selectedMeta && !useWild) {
     // In 'auto' archetype mode, 84% curated studio archetypes, 16% continuous Harmonic Wildcard
     if (rng.chance(0.16)) {
       useWild = true;
@@ -1036,8 +1162,8 @@ export function generateScene({
       // In full-auto mode, spotlight signature style 72% of the time, cross-pollinate 28%
       resolvedStyle = rng.chance(0.72) ? selectedMeta.defaultStyle : rng.pick(VALID_STYLES);
     }
-  } else if (resolvedMood === 'split') {
-    resolvedStyle = rng.chance(0.55) ? 'sphere' : rng.pick(['mesh', 'silk']);
+  } else if (resolvedMood === 'split' || hasCustomPalette) {
+    resolvedStyle = rng.chance(0.60) ? 'sphere' : rng.pick(['mesh', 'silk']);
   } else {
     resolvedStyle = rng.pick(VALID_STYLES);
   }
@@ -1050,7 +1176,44 @@ export function generateScene({
   let bridgeHue;
   let rawPolesOklch;
 
-  if (useWild) {
+  if (hasCustomPalette) {
+    archetypeId = 'custom-palette';
+    archetypeName = 'Custom Brand Palette';
+    const lchList = parsedCustomLabs.map(oklabToOklchTuple);
+    // Use first color as base if >= 3 colors provided, or synthesize harmonized base from [0]
+    if (lchList.length >= 3) {
+      rawBase = lchList[0];
+      const heroPool = lchList.slice(1);
+      const p0 = heroPool[0];
+      const p1 = heroPool[1 % heroPool.length];
+      bridgeHue = chooseArtDirectedBridgeHue(p0[2], p1[2], resolvedMood);
+      const bloomL = resolvedMood === 'dark' ? clamp(Math.max(p0[0], p1[0]) + 0.12, 0.38, 0.72) : 0.965;
+      rawBloom = [bloomL, Math.min(0.035, (p0[1] + p1[1]) * 0.2), bridgeHue];
+      rawPolesOklch = [
+        p0,
+        p1,
+        heroPool[2 % heroPool.length],
+        heroPool[3 % heroPool.length] || [clamp(p0[0] + 0.06, 0.15, 0.95), p0[1] * 0.82, wrapHue(p0[2] + 14)],
+        [clamp((p0[0] + p1[0]) * 0.5 + 0.08, 0.22, 0.94), Math.min(0.065, (p0[1] + p1[1]) * 0.35), bridgeHue],
+        rawBase,
+      ];
+    } else {
+      // 2 custom colors: opposing or duo spheres over harmonized base
+      const [p0, p1] = lchList;
+      bridgeHue = chooseArtDirectedBridgeHue(p0[2], p1[2], resolvedMood);
+      const avgL = 0.5 * (p0[0] + p1[0]);
+      rawBase = avgL < 0.48 ? [0.14, 0.025, p0[2]] : [0.968, 0.014, bridgeHue];
+      rawBloom = avgL < 0.48 ? [0.55, 0.08, bridgeHue] : [0.982, 0.016, bridgeHue];
+      rawPolesOklch = [
+        p0,
+        p1,
+        [clamp(p0[0] + 0.08, 0.18, 0.92), p0[1] * 0.78, wrapHue(p0[2] + 16)],
+        [clamp(p1[0] + 0.08, 0.18, 0.92), p1[1] * 0.78, wrapHue(p1[2] - 16)],
+        [clamp(avgL + 0.10, 0.25, 0.93), Math.min(0.06, (p0[1] + p1[1]) * 0.32), bridgeHue],
+        rawBase,
+      ];
+    }
+  } else if (useWild) {
     archetypeId = 'harmonic-wild';
     archetypeName = 'Harmonic Wildcard';
     const wildSpec = buildHarmonicWildSpec(rng, resolvedMood);
@@ -1149,6 +1312,7 @@ export function generateScene({
 
   const paletteSwatches = extractPaletteSwatches(baseLab, baseHex, poles, bloomLab, bloomHex);
   const lighting = calibrateLighting(rng, resolvedMood);
+  const uiTokens = computeUiTokens(isDark, baseHex, poles, paletteSwatches);
 
   return {
     seed: normalizedSeed,
@@ -1167,6 +1331,7 @@ export function generateScene({
     bridgeDir,
     poles,
     paletteSwatches,
+    uiTokens,
     warp: {
       scale: round6(choreography.warp.scale),
       amount: round6(choreography.warp.amount),

@@ -1,7 +1,7 @@
 {
   "name": "sphere-gl",
-  "version": "1.0.0",
-  "description": "Sub-millisecond WebGL2 & OKLCH procedural background and 4K/5K wallpaper engine. Zero dependencies.",
+  "version": "1.1.0",
+  "description": "Sub-millisecond WebGL2 & OKLCH procedural background and 4K/5K wallpaper engine. Zero dependencies, 0% idle GPU, adaptive light/dark UI tokens.",
   "type": "module",
   "main": "./dist/sphere-gl.min.js",
   "module": "./dist/sphere-gl.esm.min.js",
@@ -10,12 +10,31 @@
       "import": "./dist/sphere-gl.esm.min.js",
       "default": "./src/index.js"
     },
+    "./react": {
+      "import": "./dist/sphere-gl.react.js",
+      "default": "./src/react.js"
+    },
+    "./framer": {
+      "import": "./dist/sphere-gl.framer.js",
+      "default": "./src/framer.js"
+    },
     "./src/*": "./src/*"
   },
+  "peerDependencies": {
+    "react": ">=17.0.0"
+  },
+  "peerDependenciesMeta": {
+    "react": {
+      "optional": true
+    }
+  },
+  "sideEffects": [
+    "./dist/sphere-gl.min.js",
+    "./src/browser.js"
+  ],
   "files": [
     "dist",
     "src",
-    "index.html",
     "README.md",
     "LICENSE"
   ],
@@ -29,10 +48,14 @@
     "gradient",
     "mesh-gradient",
     "sphere-gradient",
+    "shadergradient",
+    "whatamesh",
     "oklch",
     "oklab",
     "background",
     "wallpaper",
+    "framer",
+    "react",
     "procedural",
     "shader"
   ],

@@ -1,0 +1,21 @@
+name: CI & Bundle Budget
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install esbuild for bundle verification
+        run: npm install --no-save esbuild
+      - name: Build bundles & enforce <22.5 KB gzip budget
+        run: npm run build
+      - name: Run 525-scene determinism & WCAG contrast suite
+        run: npm test

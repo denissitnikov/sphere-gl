@@ -10,7 +10,8 @@ const rootDir = path.resolve(__dirname, '..');
 const distDir = path.join(rootDir, 'dist');
 fs.mkdirSync(distDir, { recursive: true });
 
-const banner = `/*! sphere-gl v1.0.0 | MIT License | (c) 2026 Denis S. | https://github.com/denissitnikov/sphere-gl */`;
+const pkg = JSON.parse(fs.readFileSync(path.join(rootDir, 'package.json'), 'utf8'));
+const banner = `/*! sphere-gl v${pkg.version} | MIT License | (c) 2026 Denis S. | https://github.com/denissitnikov/sphere-gl */`;
 
 function findEsbuild() {
   const candidates = [
@@ -25,38 +26,55 @@ function findEsbuild() {
 
 const esbuildBin = findEsbuild();
 
-execFileSync(
-  esbuildBin,
-  [
-    path.join(rootDir, 'src', 'browser.js'),
+const targets = [
+  {
+    entry: 'src/browser.js',
+    out: 'sphere-gl.min.js',
+    format: 'iife',
+    external: [],
+  },
+  {
+    entry: 'src/index.js',
+    out: 'sphere-gl.esm.min.js',
+    format: 'esm',
+    external: [],
+  },
+  {
+    entry: 'src/react.js',
+    out: 'sphere-gl.react.js',
+    format: 'esm',
+    external: ['react'],
+  },
+  {
+    entry: 'src/framer.js',
+    out: 'sphere-gl.framer.js',
+    format: 'esm',
+    external: ['react', 'framer'],
+  },
+];
+
+for (const t of targets) {
+  const args = [
+    path.join(rootDir, t.entry),
     '--bundle',
     '--minify',
-    '--format=iife',
+    `--format=${t.format}`,
     '--target=es2020',
     `--banner:js=${banner}`,
-    `--outfile=${path.join(distDir, 'sphere-gl.min.js')}`,
-  ],
-  { stdio: 'inherit' },
-);
+    ...t.external.map((ext) => `--external:${ext}`),
+    `--outfile=${path.join(distDir, t.out)}`,
+  ];
+  execFileSync(esbuildBin, args, { stdio: 'inherit' });
+}
 
-execFileSync(
-  esbuildBin,
-  [
-    path.join(rootDir, 'src', 'index.js'),
-    '--bundle',
-    '--minify',
-    '--format=esm',
-    '--target=es2020',
-    `--banner:js=${banner}`,
-    `--outfile=${path.join(distDir, 'sphere-gl.esm.min.js')}`,
-  ],
-  { stdio: 'inherit' },
-);
-
-for (const file of ['sphere-gl.min.js', 'sphere-gl.esm.min.js']) {
-  const buf = fs.readFileSync(path.join(distDir, file));
+for (const t of targets) {
+  const buf = fs.readFileSync(path.join(distDir, t.out));
   const gz = zlib.gzipSync(buf, { level: 9 });
+  const gzKb = gz.length / 1024;
   console.log(
-    `Built dist/${file}: ${(buf.length / 1024).toFixed(1)} KB (${(gz.length / 1024).toFixed(1)} KB gzipped)`,
+    `Built dist/${t.out}: ${(buf.length / 1024).toFixed(1)} KB (${gzKb.toFixed(1)} KB gzipped)`,
   );
+  if (gzKb > 22.5) {
+    throw new Error(`Bundle size budget exceeded for ${t.out}: ${gzKb.toFixed(1)} KB > 22.5 KB`);
+  }
 }
