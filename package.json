@@ -1,0 +1,46 @@
+{
+  "name": "sphere-gl",
+  "version": "1.0.0",
+  "description": "Sub-millisecond WebGL2 & OKLCH procedural background and 4K/5K wallpaper engine. Zero dependencies.",
+  "type": "module",
+  "main": "./dist/sphere-gl.min.js",
+  "module": "./dist/sphere-gl.esm.min.js",
+  "exports": {
+    ".": {
+      "import": "./dist/sphere-gl.esm.min.js",
+      "default": "./src/index.js"
+    },
+    "./src/*": "./src/*"
+  },
+  "files": [
+    "dist",
+    "src",
+    "index.html",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "test": "node scripts/smoke-test.mjs"
+  },
+  "keywords": [
+    "webgl2",
+    "glsl",
+    "gradient",
+    "mesh-gradient",
+    "sphere-gradient",
+    "oklch",
+    "oklab",
+    "background",
+    "wallpaper",
+    "procedural",
+    "shader"
+  ],
+  "author": "Denis S. <20352477+denissitnikov@users.noreply.github.com> (https://slidetab.app)",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/denissitnikov/sphere-gl.git"
+  },
+  "homepage": "https://denissitnikov.github.io/sphere-gl/"
+}
