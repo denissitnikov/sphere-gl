@@ -23,7 +23,7 @@ export const SphereBackground = forwardRef(function SphereBackground(
     seed,
     mode,
     style,
-    mood = 'auto',
+    mood = 'system',
     harmony = 'auto',
     colors,
     grain = 1.65,

@@ -1,7 +1,7 @@
 {
   "name": "sphere-gl",
-  "version": "1.1.0",
-  "description": "Sub-millisecond WebGL2 & OKLCH procedural background and 4K/5K wallpaper engine. Zero dependencies, 0% idle GPU, adaptive light/dark UI tokens.",
+  "version": "1.2.0",
+  "description": "Sub-millisecond WebGL2 & OKLCH procedural background and 4K/5K wallpaper engine. Auto-matches OS/browser dark vs light schema, zero dependencies, 0% idle GPU.",
   "type": "module",
   "main": "./dist/sphere-gl.min.js",
   "module": "./dist/sphere-gl.esm.min.js",

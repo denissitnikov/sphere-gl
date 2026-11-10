@@ -18,6 +18,7 @@ import {
   oklabToSrgbHex,
   parseCssColorBytes,
   srgbHexToOklab,
+  detectColorScheme,
 } from './palettes.js';
 
 export {
@@ -34,6 +35,7 @@ export {
   oklabToSrgbHex,
   parseCssColorBytes,
   srgbHexToOklab,
+  detectColorScheme,
 };
 
 function parseBool(val, fallback = false) {
@@ -230,7 +232,7 @@ export function mountSphereBackground(target, options = {}) {
   let cfg = {
     seed: options.seed ?? urlCfg.seed ?? ds.sphereSeed ?? undefined,
     style: options.style ?? urlCfg.style ?? ds.sphereStyle ?? cssCfg.style ?? 'auto',
-    mood: options.mood ?? urlCfg.mood ?? ds.sphereMood ?? cssCfg.mood ?? 'auto',
+    mood: options.mood ?? urlCfg.mood ?? ds.sphereMood ?? cssCfg.mood ?? 'system',
     archetype:
       options.harmony ??
       options.archetype ??
@@ -377,7 +379,44 @@ export function mountSphereBackground(target, options = {}) {
     return currentScene;
   }
 
+  let lastDetectedScheme = detectColorScheme();
   applyScene(cfg.seed);
+
+  // Live OS prefers-color-scheme & site theme toggle sync when mood === 'system'
+  const syncSystemScheme = () => {
+    const activeMood = String(cfg.mood || 'system').trim().toLowerCase();
+    if (activeMood !== 'system') return;
+    const nextScheme = detectColorScheme();
+    if (nextScheme === lastDetectedScheme) return;
+    lastDetectedScheme = nextScheme;
+    applyScene(cfg.seed);
+  };
+
+  let schemeMedia = null;
+  if (typeof window !== 'undefined' && typeof window.matchMedia === 'function') {
+    try {
+      schemeMedia = window.matchMedia('(prefers-color-scheme: dark)');
+      if (typeof schemeMedia.addEventListener === 'function') {
+        schemeMedia.addEventListener('change', syncSystemScheme);
+      } else if (typeof schemeMedia.addListener === 'function') {
+        schemeMedia.addListener(syncSystemScheme);
+      }
+    } catch (_) {
+      schemeMedia = null;
+    }
+  }
+
+  const themeObserver =
+    typeof MutationObserver === 'function' && typeof document !== 'undefined' && document.documentElement
+      ? new MutationObserver(syncSystemScheme)
+      : null;
+
+  if (themeObserver) {
+    themeObserver.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ['class', 'data-theme', 'data-color-scheme', 'data-bs-theme'],
+    });
+  }
 
   let resizeRaf = 0;
   const ro =
@@ -461,6 +500,14 @@ export function mountSphereBackground(target, options = {}) {
     destroy() {
       if (resizeRaf) cancelAnimationFrame(resizeRaf);
       if (ro) ro.disconnect();
+      if (themeObserver) themeObserver.disconnect();
+      if (schemeMedia) {
+        if (typeof schemeMedia.removeEventListener === 'function') {
+          schemeMedia.removeEventListener('change', syncSystemScheme);
+        } else if (typeof schemeMedia.removeListener === 'function') {
+          schemeMedia.removeListener(syncSystemScheme);
+        }
+      }
       if (isFullPage) window.removeEventListener('resize', onWindowResize);
       window.removeEventListener('pointermove', onPointerMove);
       renderer.destroy();

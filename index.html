@@ -911,7 +911,8 @@
 
       <!-- Palette Mood -->
       <div class="seg-group" role="group" aria-label="Palette mood" id="mood-group">
-        <button class="seg-btn active" data-mood="auto">Auto</button>
+        <button class="seg-btn active" data-mood="system" id="system-mood-btn" title="Automatically aligns Light vs Dark backgrounds with your OS / browser appearance">System</button>
+        <button class="seg-btn" data-mood="any" title="Explore all Light, Split, and Dark harmonies">Any</button>
         <button class="seg-btn" data-mood="light">Light</button>
         <button class="seg-btn" data-mood="split">Split</button>
         <button class="seg-btn" data-mood="dark">Dark</button>
@@ -1015,9 +1016,10 @@
       randomSeed,
       parsePresetUrl,
       formatPresetUrl,
+      detectColorScheme,
     } from './src/index.js';
 
-    const VERSION = 'v1.1.0';
+    const VERSION = 'v1.2.0';
     const CDN_SCRIPT = `https://cdn.jsdelivr.net/gh/denissitnikov/sphere-gl@${VERSION}/dist/sphere-gl.min.js`;
     const CDN_ESM = `https://cdn.jsdelivr.net/gh/denissitnikov/sphere-gl@${VERSION}/dist/sphere-gl.esm.min.js`;
     const CDN_FRAMER = `https://cdn.jsdelivr.net/gh/denissitnikov/sphere-gl@${VERSION}/dist/sphere-gl.framer.js`;
@@ -1072,11 +1074,31 @@
     ];
     let grainIdx = 0;
     let styleFilter = 'sphere';
-    let moodFilter = 'auto';
+    let moodFilter = 'system';
     let archetypeFilter = 'auto';
     let motionEnabled = false;
     let snippetMode = 'random';
     let snippetApi = 'html';
+
+    const systemMoodBtn = document.getElementById('system-mood-btn');
+    function updateSystemMoodBadge() {
+      const osScheme = detectColorScheme();
+      systemMoodBtn.textContent = osScheme === 'dark' ? 'System 🌙' : 'System ☀️';
+    }
+    updateSystemMoodBadge();
+
+    if (window.matchMedia) {
+      const osMq = window.matchMedia('(prefers-color-scheme: dark)');
+      const onOsSchemeChange = () => {
+        updateSystemMoodBadge();
+        if (moodFilter === 'system') {
+          pushNewScene();
+          showToast(`Synced with OS ${detectColorScheme() === 'dark' ? 'Dark' : 'Light'} Mode`);
+        }
+      };
+      if (osMq.addEventListener) osMq.addEventListener('change', onOsSchemeChange);
+      else if (osMq.addListener) osMq.addListener(onOsSchemeChange);
+    }
 
     const history = [];
     let historyIndex = -1;
@@ -1219,10 +1241,16 @@
           motionBtn.textContent = 'Drift 60fps';
           motionBtn.classList.add('active');
         }
+        if (parsed.mood) {
+          moodFilter = parsed.mood === 'auto' ? 'any' : parsed.mood;
+          for (const b of document.querySelectorAll('[data-mood]')) {
+            b.classList.toggle('active', b.dataset.mood === moodFilter);
+          }
+        }
         pushNewScene({
           seed: parsed.seed,
           style: parsed.style || 'sphere',
-          mood: parsed.mood || 'auto',
+          mood: parsed.mood || moodFilter,
           archetype: parsed.harmony || 'auto',
           colors: parsed.colors || null,
         });
@@ -1290,9 +1318,17 @@
       for (const b of document.querySelectorAll('[data-mood]')) {
         b.classList.toggle('active', b === btn);
       }
-      if (moodFilter !== 'auto' && archetypeFilter !== 'auto') {
+      if (moodFilter !== 'any' && archetypeFilter !== 'auto') {
         const match = ARCHETYPES.find((a) => a.id === archetypeFilter);
-        if (match && match.mood && match.mood !== moodFilter) {
+        const sysScheme = detectColorScheme();
+        const incompatibleWithSystem =
+          moodFilter === 'system' &&
+          match?.mood &&
+          ((sysScheme === 'dark' && match.mood !== 'dark') ||
+            (sysScheme === 'light' && match.mood === 'dark'));
+        const incompatibleExplicit =
+          moodFilter !== 'system' && match?.mood && match.mood !== moodFilter;
+        if (incompatibleWithSystem || incompatibleExplicit) {
           archetypeFilter = 'auto';
           archetypeSelect.value = 'auto';
         }
@@ -1304,10 +1340,10 @@
       archetypeFilter = archetypeSelect.value;
       if (archetypeFilter !== 'auto') {
         const meta = ARCHETYPES.find((a) => a.id === archetypeFilter);
-        if (meta && meta.mood) {
-          moodFilter = 'auto';
+        if (meta && meta.mood && meta.mood !== 'auto') {
+          moodFilter = meta.mood;
           for (const b of document.querySelectorAll('[data-mood]')) {
-            b.classList.toggle('active', b.dataset.mood === 'auto');
+            b.classList.toggle('active', b.dataset.mood === moodFilter);
           }
         }
       }

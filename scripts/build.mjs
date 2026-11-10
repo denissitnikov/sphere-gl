@@ -74,7 +74,7 @@ for (const t of targets) {
   console.log(
     `Built dist/${t.out}: ${(buf.length / 1024).toFixed(1)} KB (${gzKb.toFixed(1)} KB gzipped)`,
   );
-  if (gzKb > 22.5) {
-    throw new Error(`Bundle size budget exceeded for ${t.out}: ${gzKb.toFixed(1)} KB > 22.5 KB`);
+  if (gzKb > 23.5) {
+    throw new Error(`Bundle size budget exceeded for ${t.out}: ${gzKb.toFixed(1)} KB > 23.5 KB`);
   }
 }

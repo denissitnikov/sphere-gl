@@ -103,6 +103,19 @@ if (
   throw new Error(`Preset URL roundtrip failed: ${JSON.stringify(parsed)}`);
 }
 
+// 5. Test `mood: 'system'` strict OS Light vs Dark schema alignment across 400 seeds
+for (let i = 0; i < 200; i++) {
+  const darkSeed = generateScene({ mood: 'system', colorScheme: 'dark' });
+  if (!darkSeed.isDark || darkSeed.uiTokens.theme !== 'dark') {
+    throw new Error(`System dark schema produced non-dark scene (${darkSeed.seed})`);
+  }
+  const lightSeed = generateScene({ mood: 'system', colorScheme: 'light' });
+  if (lightSeed.isDark || lightSeed.uiTokens.theme !== 'light') {
+    throw new Error(`System light schema produced dark scene (${lightSeed.seed})`);
+  }
+  count += 2;
+}
+
 console.log(
-  `sphere-gl v1.1 smoke test passed (${count} deterministic scenes, WCAG ink contrast >= 4.5:1, custom CSS hexes, and Preset URL roundtrip verified).`,
+  `sphere-gl v1.2 smoke test passed (${count} deterministic scenes, 100% OS dark/light schema alignment, WCAG ink contrast >= 4.5:1, custom CSS hexes, and Preset URL roundtrip verified).`,
 );

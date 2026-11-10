@@ -15,7 +15,7 @@ export default function SphereGL(props) {
     presetUrl = '',
     seed = '',
     shaderStyle = 'sphere',
-    mood = 'auto',
+    mood = 'system',
     harmony = 'auto',
     color1 = '#FBF8F0',
     color2 = '#3B82F6',
@@ -125,9 +125,9 @@ addPropertyControls(SphereGL, {
   mood: {
     type: ControlType.Enum,
     title: 'Mood',
-    options: ['auto', 'light', 'split', 'dark'],
-    optionTitles: ['Auto', 'Light', 'Split Horizon', 'Dark'],
-    defaultValue: 'auto',
+    options: ['system', 'any', 'light', 'split', 'dark'],
+    optionTitles: ['System (OS Light/Dark)', 'Any Mood', 'Light', 'Split Horizon', 'Dark'],
+    defaultValue: 'system',
     hidden: (p) => p.sourceMode === 'url' || p.sourceMode === 'custom',
   },
   harmony: {

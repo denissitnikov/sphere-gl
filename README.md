@@ -22,15 +22,15 @@
 
 ---
 
-## 10-Second Quickstart (`whatamesh`-simple, zero config)
+## 10-Second Quickstart (`whatamesh`-simple, OS Dark/Light aware)
 
-Drop 2 lines into any HTML page. Every reload synthesizes a harmonious `OKLCH` background in ~`0.8 ms` on the GPU, goes **100% idle**, and sets adaptive `--sphere-ink` & `--sphere-glass` CSS tokens so your text always stays readable:
+Drop 2 lines into any HTML page. Every reload synthesizes a harmonious `OKLCH` background in ~`0.8 ms` on the GPU, **automatically matches the visitor's OS / browser Light vs. Dark schema (`prefers-color-scheme`)**, goes **100% idle**, and live-switches in `< 1 ms` if the user toggles macOS/iOS Dark Mode:
 
 ```html
 <body data-sphere-bg data-transition-in data-sphere-style="sphere" data-sphere-grain="1.65">
   <h1 style="color: var(--sphere-ink)">A fresh canvas on every visit.</h1>
 
-  <script src="https://cdn.jsdelivr.net/gh/denissitnikov/sphere-gl@v1.1.0/dist/sphere-gl.min.js" defer></script>
+  <script src="https://cdn.jsdelivr.net/gh/denissitnikov/sphere-gl@v1.2.0/dist/sphere-gl.min.js" defer></script>
 </body>
 ```
 
@@ -64,7 +64,7 @@ Leave `--sphere-color-*` unset for automatic `OKLCH` harmonies on every visit, o
 ```
 ```html
 <section id="hero" data-sphere-bg data-transition-in>...</section>
-<script src="https://cdn.jsdelivr.net/gh/denissitnikov/sphere-gl@v1.1.0/dist/sphere-gl.min.js" defer></script>
+<script src="https://cdn.jsdelivr.net/gh/denissitnikov/sphere-gl@v1.2.0/dist/sphere-gl.min.js" defer></script>
 ```
 </details>
 
@@ -78,7 +78,7 @@ export function Hero() {
   return (
     <SphereBackground
       mode="sphere"      // 'sphere' | 'mesh' | 'silk' | 'auto'
-      mood="auto"        // 'light' | 'split' | 'dark' | 'auto'
+      mood="system"      // 'system' (matches OS dark/light) | 'any' | 'light' | 'split' | 'dark'
       grain={1.65}
       motion={false}     // false = <1ms 1-shot frame (0% idle GPU); true = 60fps drift
       style={{ minHeight: '100vh', color: 'var(--sphere-ink)' }}
@@ -101,7 +101,7 @@ Or copy **any URL directly from the [Live Studio](https://denissitnikov.github.i
 In Framer, go to **Assets → Code → Create Code File** and paste these 2 lines to unlock native Framer right-sidebar controls (`Fresh Each Visit`, `Lock Seed`, `Studio URL`, `Custom Colors`, `Style`, `Mood`, `Film Grain`, `60fps Drift`):
 
 ```tsx
-export { default } from "https://cdn.jsdelivr.net/gh/denissitnikov/sphere-gl@v1.1.0/dist/sphere-gl.framer.js"
+export { default } from "https://cdn.jsdelivr.net/gh/denissitnikov/sphere-gl@v1.2.0/dist/sphere-gl.framer.js"
 ```
 </details>
 
@@ -109,11 +109,11 @@ export { default } from "https://cdn.jsdelivr.net/gh/denissitnikov/sphere-gl@v1.
 <summary><strong>4. Vanilla ES Module / Offscreen 5K PNG Export</strong></summary>
 
 ```js
-import { mountSphereBackground } from 'https://cdn.jsdelivr.net/gh/denissitnikov/sphere-gl@v1.1.0/dist/sphere-gl.esm.min.js';
+import { mountSphereBackground } from 'https://cdn.jsdelivr.net/gh/denissitnikov/sphere-gl@v1.2.0/dist/sphere-gl.esm.min.js';
 
 const bg = mountSphereBackground('#hero', {
   style: 'sphere',
-  mood: 'auto',
+  mood: 'system', // Default: syncs with prefers-color-scheme & <html class="dark">
   grain: 1.65,
   onScene(scene) {
     console.log(scene.seed, scene.uiTokens.theme, scene.paletteSwatches);
@@ -161,7 +161,7 @@ Most WebGL gradient libraries expect you to hardcode 4 hex colors because random
 | `data-sphere-bg` | *(presence)* | — | Auto-mounts `<canvas>` (`z-index: -1`) behind all children. |
 | `data-transition-in` | *(presence)* | `false` | Smooth `320ms` opacity fade-in on first GPU frame. |
 | `data-sphere-style` | `auto` \| `sphere` \| `mesh` \| `silk` | `auto` | Shader geometry mode. |
-| `data-sphere-mood` | `auto` \| `light` \| `split` \| `dark` | `auto` | Luminance & contrast family. |
+| `data-sphere-mood` | `system` \| `any` \| `light` \| `split` \| `dark` | `system` | Defaults to `system` (matches OS `prefers-color-scheme` & `<html class="dark">` live). Use `any` for unconstrained random. |
 | `data-sphere-harmony` | `auto` \| `<archetype-id>` | `auto` | Specific harmony (`cerulean-tangerine`, `alabaster-honey`, `electric-sapphire`, etc.). |
 | `data-sphere-grain` | `0` – `2.5` | `1.0` | Film grain (`1.0` = Fine, `1.65` = Editorial, `0` = Off). |
 | `data-sphere-motion` | `true` \| `false` | `false` | `false` = 1-shot static (`0%` idle); `true` = 60fps drift + pointer parallax. |

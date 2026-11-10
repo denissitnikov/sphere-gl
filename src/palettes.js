@@ -13,10 +13,56 @@
  */
 
 export const STYLE_MODES = ['auto', 'mesh', 'sphere', 'silk'];
-export const MOOD_MODES = ['auto', 'light', 'split', 'dark'];
+export const MOOD_MODES = ['system', 'any', 'light', 'split', 'dark'];
 
 const VALID_STYLES = ['mesh', 'sphere', 'silk'];
 const VALID_MOODS = ['light', 'split', 'dark'];
+
+/**
+ * Detects the active user/site color scheme preference (`'dark'` or `'light'`).
+ * Checks explicit root theme attributes/classes first (`data-theme`, `data-color-scheme`,
+ * `.dark` / `.light` on `<html>`), then falls back to OS/browser `prefers-color-scheme`.
+ *
+ * @returns {'dark' | 'light'}
+ */
+export function detectColorScheme() {
+  if (typeof document !== 'undefined' && document.documentElement) {
+    const root = document.documentElement;
+    const body = document.body;
+    const explicitAttr = (
+      root.getAttribute('data-theme') ||
+      root.getAttribute('data-color-scheme') ||
+      root.getAttribute('data-bs-theme') ||
+      body?.getAttribute('data-theme') ||
+      body?.getAttribute('data-color-scheme') ||
+      ''
+    )
+      .trim()
+      .toLowerCase();
+
+    if (explicitAttr === 'dark') return 'dark';
+    if (explicitAttr === 'light') return 'light';
+
+    if (root.classList?.contains('dark') || body?.classList?.contains('dark')) {
+      return 'dark';
+    }
+    if (root.classList?.contains('light') || body?.classList?.contains('light')) {
+      return 'light';
+    }
+  }
+
+  if (typeof window !== 'undefined' && typeof window.matchMedia === 'function') {
+    try {
+      if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
+        return 'dark';
+      }
+    } catch (_) {
+      // Ignore matchMedia errors in restricted environments
+    }
+  }
+
+  return 'light';
+}
 const SEED_ALPHABET = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ'; // 32 unambiguous uppercase chars
 const DEG_TO_RAD = Math.PI / 180;
 const TAU = Math.PI * 2;
@@ -1091,9 +1137,10 @@ function calibrateLighting(rng, mood) {
 export function generateScene({
   seed,
   style = 'auto',
-  mood = 'auto',
+  mood = 'system',
   archetype = 'auto',
   colors = null,
+  colorScheme = null,
 } = {}) {
   const normalizedSeed =
     typeof seed === 'string' && seed.trim().length > 0
@@ -1108,8 +1155,27 @@ export function generateScene({
     : [];
   const hasCustomPalette = parsedCustomLabs.length >= 2;
 
-  const requestedMood = VALID_MOODS.includes(mood) ? mood : 'auto';
+  const rawMood = typeof mood === 'string' ? mood.trim().toLowerCase() : 'system';
   const requestedStyle = VALID_STYLES.includes(style) ? style : 'auto';
+
+  // Resolve device / browser color scheme when mood === 'system'
+  let targetScheme = null; // 'dark' | 'light' | null
+  if (rawMood === 'system') {
+    targetScheme =
+      colorScheme === 'dark' || colorScheme === 'light'
+        ? colorScheme
+        : detectColorScheme();
+  } else if (rawMood === 'daylight') {
+    targetScheme = 'light';
+  }
+
+  const requestedMood = VALID_MOODS.includes(rawMood)
+    ? rawMood
+    : targetScheme === 'dark'
+      ? 'dark'
+      : targetScheme === 'light'
+        ? 'daylight'
+        : 'any'; // 'any' or 'auto' -> unconstrained across light/split/dark
 
   // 1. Resolve Archetype & Mood deterministically
   let selectedMeta = null;
@@ -1125,7 +1191,7 @@ export function generateScene({
 
   let resolvedMood;
   if (hasCustomPalette) {
-    if (requestedMood !== 'auto') {
+    if (VALID_MOODS.includes(requestedMood)) {
       resolvedMood = requestedMood;
     } else {
       const avgCustomL =
@@ -1134,8 +1200,11 @@ export function generateScene({
     }
   } else if (selectedMeta) {
     resolvedMood = selectedMeta.mood;
-  } else if (requestedMood !== 'auto') {
+  } else if (VALID_MOODS.includes(requestedMood)) {
     resolvedMood = requestedMood;
+  } else if (requestedMood === 'daylight') {
+    // Light OS schema: 64% high-key Light Studio + 36% sunlit Split Horizon (all light-theme safe)
+    resolvedMood = rng.chance(0.64) ? 'light' : 'split';
   } else {
     resolvedMood = rng.pick(VALID_MOODS);
   }
