@@ -1,10 +1,4 @@
 'use client';
-/**
- * sphere-gl/react
- * Zero-bloat React / Next.js wrapper for SphereGL.
- * Supports generative OKLCH reload palettes, Studio URL presets (`url="..."`),
- * custom brand hex arrays, and adaptive `--sphere-ink` / `--sphere-glass` CSS tokens.
- */
 
 import {
   createElement,
@@ -25,9 +19,12 @@ export const SphereBackground = forwardRef(function SphereBackground(
     style,
     mood = 'system',
     harmony = 'auto',
+    collection,
+    atlas,
     colors,
     grain = 1.65,
     motion = false,
+    lightFollow = true,
     transitionIn = true,
     maxDpr = 2,
     onScene,
@@ -41,9 +38,9 @@ export const SphereBackground = forwardRef(function SphereBackground(
   const hostRef = useRef(null);
   const instanceRef = useRef(null);
 
-  // Allow `mode="sphere"` OR string `style="sphere"` without breaking React CSS `style={{...}}`
   const resolvedMode = mode || (typeof style === 'string' ? style : 'auto');
   const domStyle = typeof style === 'object' && style !== null ? style : undefined;
+  const resolvedCollection = collection ?? atlas ?? null;
   const colorsKey = Array.isArray(colors) ? colors.join(',') : '';
 
   useImperativeHandle(
@@ -55,8 +52,17 @@ export const SphereBackground = forwardRef(function SphereBackground(
       regenerate(opts) {
         return instanceRef.current?.regenerate(opts);
       },
+      exportImage(opts) {
+        return instanceRef.current?.exportImage(opts);
+      },
       exportPNG(opts) {
         return instanceRef.current?.exportPNG(opts);
+      },
+      exportSVG(opts) {
+        return instanceRef.current?.exportSVG(opts);
+      },
+      exportCSS() {
+        return instanceRef.current?.exportCSS();
       },
     }),
     [],
@@ -70,9 +76,11 @@ export const SphereBackground = forwardRef(function SphereBackground(
       style: resolvedMode,
       mood,
       harmony,
+      collection: resolvedCollection,
       colors,
       grain,
       motion,
+      lightFollow,
       transitionIn,
       maxDpr,
       onScene,
@@ -93,11 +101,25 @@ export const SphereBackground = forwardRef(function SphereBackground(
       style: resolvedMode,
       mood,
       harmony,
+      collection: resolvedCollection,
       colors: Array.isArray(colors) && colors.length >= 2 ? colors : null,
       grain,
       motion,
+      lightFollow,
     });
-  }, [url, preset, seed, resolvedMode, mood, harmony, colorsKey, grain, motion]);
+  }, [
+    url,
+    preset,
+    seed,
+    resolvedMode,
+    mood,
+    harmony,
+    resolvedCollection,
+    colorsKey,
+    grain,
+    motion,
+    lightFollow,
+  ]);
 
   return createElement(
     Tag,

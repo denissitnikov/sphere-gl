@@ -1,15 +1,10 @@
-/**
- * sphere-gl
- * Zero-dependency procedural WebGL2 background & 4K/5K wallpaper engine.
- * Synthesizes studio-grade diffused macro spheres, organic watercolor meshes,
- * and satin silk ribbons in <1 ms on GPU using perceptual OKLCH/OKLab color harmony.
- */
-
-import { SphereRenderer, AuraRenderer } from './shader.js';
+import { SphereRenderer, AuraRenderer, STYLE_MAP, styleToIndex } from './shader.js';
 import {
   STYLE_MODES,
   MOOD_MODES,
   ARCHETYPES,
+  COLLECTIONS,
+  ATLASES,
   randomSeed,
   generateScene,
   oklchToOklab,
@@ -24,9 +19,13 @@ import {
 export {
   SphereRenderer,
   AuraRenderer,
+  STYLE_MAP,
+  styleToIndex,
   STYLE_MODES,
   MOOD_MODES,
   ARCHETYPES,
+  COLLECTIONS,
+  ATLASES,
   randomSeed,
   generateScene,
   oklchToOklab,
@@ -53,13 +52,22 @@ function parseNum(val, fallback) {
   return Number.isFinite(n) ? n : fallback;
 }
 
-/**
- * Parses a Studio share URL, query string (`?seed=...`), or hash string (`#seed=...`)
- * into normalized `mountSphereBackground` options (ShaderGradient-style URL preset workflow).
- *
- * @param {string} urlOrQuery
- * @returns {object}
- */
+function normalizeAtlasId(raw) {
+  if (typeof raw !== 'string') return null;
+  const v = raw.trim().toLowerCase();
+  return v && v !== 'all' && v !== 'auto' && v !== 'none' ? v : null;
+}
+
+function resolveWhisperStrength(val) {
+  if (val === false || val === 'false' || val === '0' || val === 'off') return 0;
+  if (typeof val === 'number' && Number.isFinite(val)) return Math.max(0, Math.min(1.5, val));
+  if (typeof val === 'string' && val.trim() !== '') {
+    const n = Number(val);
+    if (Number.isFinite(n)) return Math.max(0, Math.min(1.5, n));
+  }
+  return parseBool(val, true) ? 1.0 : 0;
+}
+
 export function parsePresetUrl(urlOrQuery) {
   if (typeof urlOrQuery !== 'string' || !urlOrQuery.trim()) return {};
   const raw = urlOrQuery.trim();
@@ -69,8 +77,7 @@ export function parsePresetUrl(urlOrQuery) {
     if (!part) return;
     const clean = part.replace(/^[?#]+/, '');
     if (!clean) return;
-    const sp = new URLSearchParams(clean);
-    for (const [k, v] of sp.entries()) {
+    for (const [k, v] of new URLSearchParams(clean).entries()) {
       merged.set(k, v);
     }
   };
@@ -105,12 +112,26 @@ export function parsePresetUrl(urlOrQuery) {
       merged.get('archetype')
     ).trim();
   }
+  if (merged.has('atlas') || merged.has('collection') || merged.has('col')) {
+    const col = normalizeAtlasId(
+      merged.get('atlas') ?? merged.get('collection') ?? merged.get('col'),
+    );
+    if (col) {
+      out.atlas = col;
+      out.collection = col;
+    }
+  }
   if (merged.has('grain')) {
     const g = Number(merged.get('grain'));
     if (Number.isFinite(g)) out.grain = g;
   }
   if (merged.has('motion')) {
     out.motion = parseBool(merged.get('motion'), false);
+  }
+  if (merged.has('light') || merged.has('whisper')) {
+    const rawL = merged.get('light') ?? merged.get('whisper');
+    const numL = Number(rawL);
+    out.lightFollow = Number.isFinite(numL) && rawL.trim() !== '' ? numL : parseBool(rawL, true);
   }
   if (merged.has('colors')) {
     const list = merged
@@ -123,9 +144,6 @@ export function parsePresetUrl(urlOrQuery) {
   return out;
 }
 
-/**
- * Formats a shareable Studio preset URL from a scene & current studio settings.
- */
 export function formatPresetUrl(
   scene,
   {
@@ -137,10 +155,12 @@ export function formatPresetUrl(
   } = {},
 ) {
   const params = new URLSearchParams();
+  const col = scene?.atlas || scene?.collection;
   if (lockSeed && scene?.seed) params.set('seed', scene.seed);
+  if (col) params.set('col', col);
   if (scene?.style) params.set('style', scene.style);
   if (scene?.mood) params.set('mood', scene.mood);
-  if (scene?.archetypeId && scene.archetypeId !== 'custom-palette') {
+  if (scene?.archetypeId && scene.archetypeId !== 'custom-palette' && !col) {
     params.set('arch', scene.archetypeId);
   }
   if (Number.isFinite(grain)) params.set('grain', String(grain));
@@ -176,6 +196,15 @@ function readCssVariableConfig(el) {
   const cssHarmony = cs.getPropertyValue('--sphere-harmony').trim();
   if (cssHarmony) out.harmony = cssHarmony;
 
+  const cssAtlas =
+    cs.getPropertyValue('--sphere-atlas').trim() ||
+    cs.getPropertyValue('--sphere-collection').trim();
+  if (cssAtlas) {
+    const col = normalizeAtlasId(cssAtlas);
+    out.atlas = col;
+    out.collection = col;
+  }
+
   const cssGrain = cs.getPropertyValue('--sphere-grain').trim();
   if (cssGrain !== '') {
     const g = Number(cssGrain);
@@ -185,17 +214,6 @@ function readCssVariableConfig(el) {
   return out;
 }
 
-/**
- * Mounts a procedural WebGL2 background onto any DOM container (`body`, `section`, `div`)
- * or directly onto an existing `<canvas>` element (`whatamesh`-style).
- *
- * Automatically exposes `data-sphere-theme="light|dark"` and adaptive CSS tokens:
- * `--sphere-base`, `--sphere-bloom`, `--sphere-accent`, `--sphere-ink`,
- * `--sphere-ink-muted`, `--sphere-glass`, `--sphere-glass-border`.
- *
- * @param {HTMLElement | HTMLCanvasElement | string} [target=document.body]
- * @param {object} [options]
- */
 export function mountSphereBackground(target, options = {}) {
   const el =
     typeof target === 'string'
@@ -229,7 +247,27 @@ export function mountSphereBackground(target, options = {}) {
         .filter(Boolean)
     : undefined;
 
-  let cfg = {
+  const rawLightFollow =
+    options.lightFollow ??
+    urlCfg.lightFollow ??
+    ds.sphereLightFollow ??
+    ds.lightFollow ??
+    true;
+
+  const rawAtlas =
+    options.atlas ??
+    options.collection ??
+    urlCfg.atlas ??
+    urlCfg.collection ??
+    ds.sphereAtlas ??
+    ds.sphereCollection ??
+    ds.atlas ??
+    ds.collection ??
+    cssCfg.atlas ??
+    cssCfg.collection ??
+    null;
+
+  const cfg = {
     seed: options.seed ?? urlCfg.seed ?? ds.sphereSeed ?? undefined,
     style: options.style ?? urlCfg.style ?? ds.sphereStyle ?? cssCfg.style ?? 'auto',
     mood: options.mood ?? urlCfg.mood ?? ds.sphereMood ?? cssCfg.mood ?? 'system',
@@ -241,6 +279,7 @@ export function mountSphereBackground(target, options = {}) {
       ds.sphereArchetype ??
       cssCfg.harmony ??
       'auto',
+    collection: normalizeAtlasId(rawAtlas),
     colors: options.colors ?? urlCfg.colors ?? attrColors ?? cssCfg.colors ?? null,
     grainScale: parseNum(
       options.grain ??
@@ -250,10 +289,8 @@ export function mountSphereBackground(target, options = {}) {
         cssCfg.grain,
       1.0,
     ),
-    motion: parseBool(
-      options.motion ?? urlCfg.motion ?? ds.sphereMotion,
-      false,
-    ),
+    motion: parseBool(options.motion ?? urlCfg.motion ?? ds.sphereMotion, false),
+    whisperStrength: resolveWhisperStrength(rawLightFollow),
     transitionIn: parseBool(
       options.transitionIn ??
         (el.hasAttribute?.('data-transition-in') ? true : ds.sphereTransitionIn),
@@ -271,12 +308,8 @@ export function mountSphereBackground(target, options = {}) {
       document.body.style.backgroundColor = 'transparent';
     } else {
       const computed = window.getComputedStyle(container);
-      if (computed.position === 'static') {
-        container.style.position = 'relative';
-      }
-      if (computed.isolation === 'auto') {
-        container.style.isolation = 'isolate';
-      }
+      if (computed.position === 'static') container.style.position = 'relative';
+      if (computed.isolation === 'auto') container.style.isolation = 'isolate';
     }
 
     canvas = document.createElement('canvas');
@@ -314,10 +347,13 @@ export function mountSphereBackground(target, options = {}) {
   function applyThemeAttributes(node, scene) {
     if (!node || !node.style) return;
     const t = scene.uiTokens;
+    const col = scene.collection || '';
     node.dataset.sphereTheme = t.theme;
     node.dataset.sphereMood = scene.mood;
     node.dataset.sphereStyle = scene.style;
     node.dataset.sphereSeed = scene.seed;
+    node.dataset.sphereCollection = col;
+    node.dataset.sphereAtlas = col;
     node.style.setProperty('--sphere-base', scene.baseHex);
     node.style.setProperty('--sphere-bloom', scene.bloomHex);
     node.style.setProperty('--sphere-accent', t.accent);
@@ -327,14 +363,17 @@ export function mountSphereBackground(target, options = {}) {
     node.style.setProperty('--sphere-glass-border', t.glassBorder);
   }
 
-  function applyScene(seedOverride) {
+  function applyScene(seedOverride, { morph = false, morphDuration = 540 } = {}) {
+    const prevScene = currentScene;
     currentScene = generateScene({
       seed: seedOverride,
       style: cfg.style,
       mood: cfg.mood,
       archetype: cfg.archetype,
+      collection: cfg.collection,
       colors: cfg.colors,
     });
+    currentScene.atlas = currentScene.collection;
 
     applyThemeAttributes(container, currentScene);
     if (isDirectCanvas) applyThemeAttributes(canvas, currentScene);
@@ -347,6 +386,11 @@ export function mountSphereBackground(target, options = {}) {
     if (cfg.motion && !prefersReducedMotion) {
       renderer.stopMotion();
       renderer.startMotion(currentScene, { grainScale: cfg.grainScale });
+    } else if (morph && prevScene && !prefersReducedMotion) {
+      renderer.morphTo(currentScene, {
+        duration: morphDuration,
+        grainScale: cfg.grainScale,
+      });
     } else {
       renderer.stopMotion();
       renderer.renderOnce(currentScene, { grainScale: cfg.grainScale });
@@ -382,14 +426,12 @@ export function mountSphereBackground(target, options = {}) {
   let lastDetectedScheme = detectColorScheme();
   applyScene(cfg.seed);
 
-  // Live OS prefers-color-scheme & site theme toggle sync when mood === 'system'
   const syncSystemScheme = () => {
-    const activeMood = String(cfg.mood || 'system').trim().toLowerCase();
-    if (activeMood !== 'system') return;
+    if (String(cfg.mood || 'system').trim().toLowerCase() !== 'system') return;
     const nextScheme = detectColorScheme();
     if (nextScheme === lastDetectedScheme) return;
     lastDetectedScheme = nextScheme;
-    applyScene(cfg.seed);
+    applyScene(cfg.seed, { morph: !prefersReducedMotion, morphDuration: 620 });
   };
 
   let schemeMedia = null;
@@ -407,7 +449,9 @@ export function mountSphereBackground(target, options = {}) {
   }
 
   const themeObserver =
-    typeof MutationObserver === 'function' && typeof document !== 'undefined' && document.documentElement
+    typeof MutationObserver === 'function' &&
+    typeof document !== 'undefined' &&
+    document.documentElement
       ? new MutationObserver(syncSystemScheme)
       : null;
 
@@ -418,48 +462,83 @@ export function mountSphereBackground(target, options = {}) {
     });
   }
 
+  let cachedRect = null;
+  const invalidateRect = () => {
+    cachedRect = null;
+  };
+
   let resizeRaf = 0;
-  const ro =
-    typeof ResizeObserver === 'function'
-      ? new ResizeObserver(() => {
-          if (resizeRaf) cancelAnimationFrame(resizeRaf);
-          resizeRaf = requestAnimationFrame(() => {
-            renderer.resize();
-            if (currentScene && !renderer.isAnimating) {
-              renderer.renderOnce(currentScene, { grainScale: cfg.grainScale });
-            }
-          });
-        })
-      : null;
-
-  if (ro) {
-    ro.observe(isFullPage ? document.documentElement : el);
-  }
-
-  const onWindowResize = () => {
+  const scheduleResize = () => {
+    invalidateRect();
     if (resizeRaf) cancelAnimationFrame(resizeRaf);
     resizeRaf = requestAnimationFrame(() => {
+      resizeRaf = 0;
       renderer.resize();
-      if (currentScene && !renderer.isAnimating) {
+      if (currentScene && !renderer.isAnimating && !renderer.isMorphing) {
         renderer.renderOnce(currentScene, { grainScale: cfg.grainScale });
       }
     });
   };
-  if (isFullPage) {
-    window.addEventListener('resize', onWindowResize, { passive: true });
+
+  const ro =
+    typeof ResizeObserver === 'function' ? new ResizeObserver(scheduleResize) : null;
+  if (ro) {
+    ro.observe(isFullPage ? document.documentElement : el);
+  }
+
+  if (typeof window !== 'undefined') {
+    if (isFullPage) {
+      window.addEventListener('resize', scheduleResize, { passive: true });
+    } else {
+      window.addEventListener('scroll', invalidateRect, { passive: true });
+    }
   }
 
   const onPointerMove = (e) => {
-    if (!renderer.isAnimating) return;
-    const rect = canvas.getBoundingClientRect();
-    if (!rect.width || !rect.height) return;
-    const nx = ((e.clientX - rect.left) / rect.width) * 2 - 1;
-    const ny = ((e.clientY - rect.top) / rect.height) * 2 - 1;
-    renderer.setPointer(nx, ny);
+    if (e.pointerType === 'touch') return;
+    const wantWhisper = cfg.whisperStrength > 0 && !prefersReducedMotion;
+    if (!renderer.isAnimating && !wantWhisper) return;
+
+    let w = 0;
+    let h = 0;
+    let left = 0;
+    let top = 0;
+    if (isFullPage && typeof window !== 'undefined') {
+      w = window.innerWidth;
+      h = window.innerHeight;
+    } else {
+      if (!cachedRect) cachedRect = canvas.getBoundingClientRect();
+      w = cachedRect.width;
+      h = cachedRect.height;
+      left = cachedRect.left;
+      top = cachedRect.top;
+    }
+    if (!w || !h) return;
+
+    const nx = ((e.clientX - left) / w) * 2 - 1;
+    const ny = ((e.clientY - top) / h) * 2 - 1;
+
+    if (renderer.isAnimating) {
+      renderer.setPointer(nx, ny);
+    } else {
+      renderer.wakePointer(nx, ny, {
+        strength: cfg.whisperStrength,
+        grainScale: cfg.grainScale,
+      });
+    }
   };
 
-  if (options.interactivePointer !== false) {
+  const onPointerLeave = () => {
+    if (!renderer.isAnimating && renderer.isWhispering) {
+      renderer.wakePointer(0, 0, { strength: 0, grainScale: cfg.grainScale });
+    }
+  };
+
+  if (options.interactivePointer !== false && typeof window !== 'undefined') {
     window.addEventListener('pointermove', onPointerMove, { passive: true });
+    if (typeof document !== 'undefined') {
+      document.addEventListener('pointerleave', onPointerLeave, { passive: true });
+    }
   }
 
   const instance = {
@@ -468,19 +547,32 @@ export function mountSphereBackground(target, options = {}) {
     get scene() {
       return currentScene;
     },
-    regenerate(next = {}) {
-      if (next.url || next.preset) {
-        Object.assign(cfg, parsePresetUrl(next.url || next.preset));
-      }
+    regenerate(rawNext = {}) {
+      const next =
+        rawNext.url || rawNext.preset
+          ? { ...parsePresetUrl(rawNext.url || rawNext.preset), ...rawNext }
+          : rawNext;
+
+      if (next.seed !== undefined) cfg.seed = next.seed;
       if (next.style !== undefined) cfg.style = next.style;
       if (next.mood !== undefined) cfg.mood = next.mood;
       if (next.harmony !== undefined) cfg.archetype = next.harmony;
       if (next.archetype !== undefined) cfg.archetype = next.archetype;
+      const nextAtlas = next.atlas !== undefined ? next.atlas : next.collection;
+      if (nextAtlas !== undefined) cfg.collection = normalizeAtlasId(nextAtlas);
       if (next.colors !== undefined) cfg.colors = next.colors;
       if (next.grain !== undefined) cfg.grainScale = parseNum(next.grain, 1.0);
       if (next.grainScale !== undefined) cfg.grainScale = parseNum(next.grainScale, 1.0);
       if (next.motion !== undefined) cfg.motion = Boolean(next.motion);
-      return applyScene(next.seed);
+      if (next.lightFollow !== undefined) {
+        cfg.whisperStrength = resolveWhisperStrength(next.lightFollow);
+      }
+
+      const seedToUse = next.seed !== undefined ? next.seed : undefined;
+      return applyScene(seedToUse, {
+        morph: Boolean(next.morph),
+        morphDuration: next.morphDuration ?? 540,
+      });
     },
     refreshCssVariables() {
       const updatedCss = readCssVariableConfig(el);
@@ -488,14 +580,32 @@ export function mountSphereBackground(target, options = {}) {
       if (updatedCss.style) cfg.style = updatedCss.style;
       if (updatedCss.mood) cfg.mood = updatedCss.mood;
       if (updatedCss.harmony) cfg.archetype = updatedCss.harmony;
+      if (updatedCss.atlas !== undefined || updatedCss.collection !== undefined) {
+        cfg.collection = updatedCss.atlas ?? updatedCss.collection;
+      }
       if (updatedCss.grain !== undefined) cfg.grainScale = updatedCss.grain;
       return applyScene(cfg.seed);
+    },
+    exportImage(exportOpts = {}) {
+      return renderer.exportImage(currentScene, {
+        grainScale: cfg.grainScale,
+        ...exportOpts,
+      });
     },
     exportPNG(exportOpts = {}) {
       return renderer.exportPNG(currentScene, {
         grainScale: cfg.grainScale,
         ...exportOpts,
       });
+    },
+    exportSVG(exportOpts = {}) {
+      return renderer.exportSVG(currentScene, {
+        grainScale: cfg.grainScale,
+        ...exportOpts,
+      });
+    },
+    exportCSS() {
+      return renderer.exportCSS(currentScene);
     },
     destroy() {
       if (resizeRaf) cancelAnimationFrame(resizeRaf);
@@ -508,8 +618,14 @@ export function mountSphereBackground(target, options = {}) {
           schemeMedia.removeListener(syncSystemScheme);
         }
       }
-      if (isFullPage) window.removeEventListener('resize', onWindowResize);
-      window.removeEventListener('pointermove', onPointerMove);
+      if (typeof window !== 'undefined') {
+        if (isFullPage) window.removeEventListener('resize', scheduleResize);
+        else window.removeEventListener('scroll', invalidateRect);
+        window.removeEventListener('pointermove', onPointerMove);
+      }
+      if (typeof document !== 'undefined') {
+        document.removeEventListener('pointerleave', onPointerLeave);
+      }
       renderer.destroy();
       if (!isDirectCanvas) canvas.remove();
       delete el.__sphereInstance;
@@ -522,18 +638,15 @@ export function mountSphereBackground(target, options = {}) {
 
 export { mountSphereBackground as mount, mountSphereBackground as mountAuraBackground };
 
-/**
- * Automatically mounts SphereGL on all `[data-sphere-bg]` elements in the document.
- * Ideal for strict CSP (`script-src 'self'`) sites requiring zero inline JS.
- */
 export function autoMountSphereBackgrounds(root = document) {
   if (!root || typeof root.querySelectorAll !== 'function') return [];
   const instances = [];
   if (root === document && document.documentElement?.hasAttribute('data-sphere-bg')) {
     instances.push(mountSphereBackground(document.documentElement));
+  } else if (root.nodeType === 1 && root.hasAttribute?.('data-sphere-bg')) {
+    instances.push(mountSphereBackground(root));
   }
-  const nodes = root.querySelectorAll('[data-sphere-bg]');
-  for (const el of nodes) {
+  for (const el of root.querySelectorAll('[data-sphere-bg]')) {
     instances.push(mountSphereBackground(el));
   }
   return instances;

@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import {
   ARCHETYPES,
+  COLLECTIONS,
   STYLE_MODES,
   MOOD_MODES,
   generateScene,
@@ -64,7 +65,7 @@ for (const arch of ARCHETYPES) {
   count++;
 }
 
-// 3. Test sRGB <-> OKLab roundtrip & custom brand palette override (whatamesh-style)
+// 3. Test sRGB <-> OKLab roundtrip & custom brand palette override
 for (const sampleHex of ['#47ABFF', '#FF7A45', '#FDFBF7', '#04070F', '#8CE5FF']) {
   const lab = srgbHexToOklab(sampleHex);
   if (!lab) throw new Error(`Failed to parse ${sampleHex}`);
@@ -85,7 +86,7 @@ if (customScene.archetypeId !== 'custom-palette' || !customScene.isDark) {
   throw new Error('Custom dark brand palette failed');
 }
 
-// 4. Test Preset URL formatting & parsing (ShaderGradient-style URL preset)
+// 4. Test Preset URL formatting & parsing
 const presetUrl = formatPresetUrl(customScene, {
   grain: 1.65,
   motion: true,
@@ -116,6 +117,51 @@ for (let i = 0; i < 200; i++) {
   count += 2;
 }
 
+// 6. Test all 8 Procedural COLLECTIONS (heroes + random seeds) & WCAG contrast
+if (!Array.isArray(COLLECTIONS) || COLLECTIONS.length !== 8) {
+  throw new Error(`Expected 8 COLLECTIONS, got ${COLLECTIONS?.length}`);
+}
+for (const col of COLLECTIONS) {
+  for (const heroSeed of col.heroes) {
+    const sc = generateScene({ seed: heroSeed, collection: col.id });
+    if (sc.collection !== col.id) {
+      throw new Error(`Expected collection ${col.id}, got ${sc.collection}`);
+    }
+    const cr = contrastRatio(sc.baseHex, sc.uiTokens.ink);
+    if (cr < 4.5) {
+      throw new Error(`Low contrast (${cr.toFixed(2)}) in collection ${col.id} hero ${heroSeed}`);
+    }
+    count++;
+  }
+}
+
+// 7. Test lockGeometrySeed Day <-> Night physical sphere anchoring & style count (4 modes, fluted removed)
+if (STYLE_MODES.includes('fluted') || STYLE_MODES.length !== 4) {
+  throw new Error(`Expected 4 STYLE_MODES without fluted, got ${JSON.stringify(STYLE_MODES)}`);
+}
+const dayScene = generateScene({ seed: 'SOLAS1', style: 'sphere', mood: 'light' });
+const nightScene = generateScene({ seed: 'SOLAS1', style: 'sphere', mood: 'dark' });
+if (
+  dayScene.poles[0].pos[0] !== nightScene.poles[0].pos[0] ||
+  dayScene.poles[0].pos[1] !== nightScene.poles[0].pos[1] ||
+  dayScene.poles[0].radius !== nightScene.poles[0].radius ||
+  dayScene.isDark === nightScene.isDark
+) {
+  throw new Error('lockGeometrySeed failed to anchor spatial geometry across Day <-> Night moods');
+}
+
+// 8. Test exportSVG & exportCSS on SphereRenderer prototype
+const { SphereRenderer } = await import('../src/index.js');
+const svgOut = SphereRenderer.prototype.exportSVG.call({ _lastScene: dayScene }, dayScene, {
+  width: 1200,
+  height: 630,
+  grainScale: 1.65,
+});
+const cssOut = SphereRenderer.prototype.exportCSS.call({ _lastScene: dayScene }, dayScene);
+if (!svgOut.startsWith('<svg') || !svgOut.includes('radialGradient') || !cssOut.includes('radial-gradient')) {
+  throw new Error('exportSVG or exportCSS output validation failed');
+}
+
 console.log(
-  `sphere-gl v1.2 smoke test passed (${count} deterministic scenes, 100% OS dark/light schema alignment, WCAG ink contrast >= 4.5:1, custom CSS hexes, and Preset URL roundtrip verified).`,
+  `sphere-gl-lab smoke test passed (${count} deterministic scenes, 8 procedural collections, 4 optical styles, PNG/WebP/JPG/SVG/CSS exports, Day/Night geometry lock, 100% OS dark/light schema alignment, and WCAG ink contrast >= 4.5:1 verified).`,
 );

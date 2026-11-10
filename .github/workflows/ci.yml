@@ -15,7 +15,7 @@ jobs:
           node-version: 22
       - name: Install esbuild for bundle verification
         run: npm install --no-save esbuild
-      - name: Build bundles & enforce <22.5 KB gzip budget
+      - name: Build bundles & enforce gzip budget
         run: npm run build
-      - name: Run 525-scene determinism & WCAG contrast suite
+      - name: Run determinism & WCAG contrast suite
         run: npm test

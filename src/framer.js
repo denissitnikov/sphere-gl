@@ -1,13 +1,6 @@
-/**
- * sphere-gl/framer
- * Native Framer Code Component with full right-sidebar Property Controls.
- * Import directly in Framer via ESM URL:
- * https://cdn.jsdelivr.net/gh/denissitnikov/sphere-gl@v1.1.0/dist/sphere-gl.framer.js
- */
-
 import { createElement, useEffect, useRef } from 'react';
 import { addPropertyControls, ControlType } from 'framer';
-import { ARCHETYPES, mountSphereBackground } from './index.js';
+import { ARCHETYPES, COLLECTIONS, mountSphereBackground } from './index.js';
 
 export default function SphereGL(props) {
   const {
@@ -16,12 +9,15 @@ export default function SphereGL(props) {
     seed = '',
     shaderStyle = 'sphere',
     mood = 'system',
+    collection = 'auto',
+    atlas,
     harmony = 'auto',
     color1 = '#FBF8F0',
     color2 = '#3B82F6',
     color3 = '#FF7A45',
     color4 = '#A855F7',
     grain = 1.65,
+    lightFollow = true,
     motion = false,
     style: framerLayoutStyle,
   } = props;
@@ -33,6 +29,11 @@ export default function SphereGL(props) {
   const effectiveSeed = sourceMode === 'locked' && seed ? seed : undefined;
   const effectiveColors =
     sourceMode === 'custom' ? [color1, color2, color3, color4].filter(Boolean) : null;
+  const rawCollection = collection !== 'auto' ? collection : atlas;
+  const effectiveCollection =
+    sourceMode === 'url' || sourceMode === 'custom' || !rawCollection || rawCollection === 'auto'
+      ? null
+      : rawCollection;
 
   useEffect(() => {
     if (!containerRef.current) return undefined;
@@ -41,9 +42,11 @@ export default function SphereGL(props) {
       seed: effectiveSeed,
       style: shaderStyle,
       mood,
+      collection: effectiveCollection,
       harmony,
       colors: effectiveColors,
       grain,
+      lightFollow,
       motion,
       transitionIn: false,
     });
@@ -61,9 +64,11 @@ export default function SphereGL(props) {
       seed: effectiveSeed,
       style: shaderStyle,
       mood,
+      collection: effectiveCollection,
       harmony,
       colors: effectiveColors,
       grain,
+      lightFollow,
       motion,
     });
   }, [
@@ -72,12 +77,14 @@ export default function SphereGL(props) {
     effectiveSeed,
     shaderStyle,
     mood,
+    effectiveCollection,
     harmony,
     color1,
     color2,
     color3,
     color4,
     grain,
+    lightFollow,
     motion,
   ]);
 
@@ -117,8 +124,8 @@ addPropertyControls(SphereGL, {
   shaderStyle: {
     type: ControlType.Enum,
     title: 'Style',
-    options: ['sphere', 'mesh', 'silk', 'auto'],
-    optionTitles: ['Sphere (f/0.95)', 'Mesh (Watercolor)', 'Silk (Ribbon)', 'Auto'],
+    options: ['sphere', 'mesh', 'silk', 'caustic', 'auto'],
+    optionTitles: ['Sphere (f/0.95)', 'Mesh (Watercolor)', 'Silk (Ribbon)', 'Caustic (Cusps)', 'Auto'],
     defaultValue: 'sphere',
     hidden: (p) => p.sourceMode === 'url',
   },
@@ -130,13 +137,24 @@ addPropertyControls(SphereGL, {
     defaultValue: 'system',
     hidden: (p) => p.sourceMode === 'url' || p.sourceMode === 'custom',
   },
+  collection: {
+    type: ControlType.Enum,
+    title: 'Atlas',
+    options: ['auto', ...COLLECTIONS.map((c) => c.id)],
+    optionTitles: ['All Harmonies', ...COLLECTIONS.map((c) => c.name)],
+    defaultValue: 'auto',
+    hidden: (p) => p.sourceMode === 'url' || p.sourceMode === 'custom',
+  },
   harmony: {
     type: ControlType.Enum,
     title: 'Harmony',
     options: ['auto', ...ARCHETYPES.map((a) => a.id)],
     optionTitles: ['All Harmonies', ...ARCHETYPES.map((a) => a.name)],
     defaultValue: 'auto',
-    hidden: (p) => p.sourceMode === 'url' || p.sourceMode === 'custom',
+    hidden: (p) =>
+      p.sourceMode === 'url' ||
+      p.sourceMode === 'custom' ||
+      Boolean(p.collection && p.collection !== 'auto'),
   },
   color1: {
     type: ControlType.Color,
@@ -169,6 +187,13 @@ addPropertyControls(SphereGL, {
     max: 2.5,
     step: 0.05,
     defaultValue: 1.65,
+  },
+  lightFollow: {
+    type: ControlType.Boolean,
+    title: 'Solas Light',
+    enabledTitle: 'Follow',
+    disabledTitle: 'Off',
+    defaultValue: true,
   },
   motion: {
     type: ControlType.Boolean,

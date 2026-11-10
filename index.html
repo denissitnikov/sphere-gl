@@ -3,21 +3,19 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>sphere-gl — Sub-Millisecond WebGL2 Backgrounds &amp; 5K Wallpaper Studio</title>
-  <meta name="description" content="22 KB zero-dependency WebGL2 & OKLCH engine that synthesizes a fresh, never-muddy diffused sphere or mesh background on every visit in <1 ms with 0% idle GPU." />
+  <title>sphere-gl · Fast WebGL2 Backgrounds &amp; 5K Wallpaper Generator</title>
+  <meta name="description" content="A 26 KB WebGL2 and OKLCH engine that draws a clean, non-muddy background on every visit in under 1 ms, matches OS light/dark mode, and sleeps at 0% GPU." />
 
-  <!-- Open Graph & Social Card -->
   <meta property="og:type" content="website" />
   <meta property="og:url" content="https://denissitnikov.github.io/sphere-gl/" />
-  <meta property="og:title" content="sphere-gl — Fresh WebGL2 Studio Canvas on Every Visit (<1 ms GPU)" />
-  <meta property="og:description" content="Zero dependencies, 22 KB gzip, 0% idle GPU. Diffused f/0.95 spheres & liquid mesh gradients in perceptual OKLCH—for HTML, CSS, React, Framer, and 5K wallpapers." />
+  <meta property="og:title" content="sphere-gl · WebGL2 Backgrounds &amp; 5K Wallpaper Generator" />
+  <meta property="og:description" content="26 KB gzip, zero dependencies, 0% idle GPU. Clean OKLCH color harmonies for HTML, CSS, React, Framer, and 5K wallpapers." />
   <meta property="og:image" content="https://denissitnikov.github.io/sphere-gl/assets/og-card.jpg" />
   <meta name="twitter:card" content="summary_large_image" />
-  <meta name="twitter:title" content="sphere-gl — Sub-Millisecond WebGL2 & OKLCH Background Engine" />
-  <meta name="twitter:description" content="Synthesize a fresh, never-muddy studio background on every reload in <1 ms with automatic light/dark UI tokens." />
+  <meta name="twitter:title" content="sphere-gl · WebGL2 &amp; OKLCH Background Engine" />
+  <meta name="twitter:description" content="Draw a fresh, readable WebGL2 background on every reload in under 1 ms with automatic light and dark UI tokens." />
   <meta name="twitter:image" content="https://denissitnikov.github.io/sphere-gl/assets/og-card.jpg" />
 
-  <!-- Preload ES Modules for First-Frame Synthesis -->
   <link rel="modulepreload" href="./src/index.js" />
   <link rel="modulepreload" href="./src/shader.js" />
   <link rel="modulepreload" href="./src/palettes.js" />
@@ -30,8 +28,8 @@
     "codeRepository": "https://github.com/denissitnikov/sphere-gl",
     "license": "https://opensource.org/licenses/MIT",
     "programmingLanguage": ["JavaScript", "GLSL"],
-    "author": { "@type": "Person", "name": "Denis S.", "url": "https://slidetab.app" },
-    "description": "Sub-millisecond WebGL2 & OKLCH procedural website background and 5K wallpaper engine."
+    "author": { "@type": "Person", "name": "Denis S.", "url": "https://github.com/denissitnikov" },
+    "description": "Fast WebGL2 and OKLCH background and 5K wallpaper generator."
   }
   </script>
 
@@ -112,8 +110,10 @@
     }
 
     body.ui-hidden .top-bar,
-    body.ui-hidden .dock-wrap {
+    body.ui-hidden .dock-wrap,
+    body.ui-hidden .collections-drawer {
       opacity: 0;
+      visibility: hidden;
       pointer-events: none !important;
     }
     body.ui-hidden .top-bar {
@@ -238,10 +238,7 @@
       background: var(--hud-pill-hover);
     }
 
-    /* =========================================================================
-       CONTEXT MODE 2: Live Adaptive Website Hero Mockup (`data-preview="website"`)
-       Demonstrates automatic `--sphere-ink` & `--sphere-glass` token adaptation!
-       ========================================================================= */
+    /* Live Adaptive Website Hero Mockup */
     .website-preview {
       position: fixed;
       inset: 0;
@@ -253,14 +250,17 @@
       padding: 64px 24px 124px;
       z-index: 10;
       pointer-events: none;
+      visibility: hidden;
       opacity: 0;
       transform: translateY(10px) scale(0.99);
-      transition: opacity 0.30s cubic-bezier(0.16, 1, 0.3, 1), transform 0.30s cubic-bezier(0.16, 1, 0.3, 1);
+      transition: opacity 0.30s cubic-bezier(0.16, 1, 0.3, 1), transform 0.30s cubic-bezier(0.16, 1, 0.3, 1), visibility 0s linear 0.30s;
     }
 
     body[data-preview="website"] .website-preview {
       opacity: 1;
+      visibility: visible;
       transform: translateY(0) scale(1);
+      transition: opacity 0.30s cubic-bezier(0.16, 1, 0.3, 1), transform 0.30s cubic-bezier(0.16, 1, 0.3, 1), visibility 0s linear 0s;
     }
 
     .hero-eyebrow {
@@ -314,8 +314,12 @@
       display: inline-flex;
       align-items: center;
       gap: 12px;
-      pointer-events: auto;
+      pointer-events: none;
       margin-bottom: 34px;
+    }
+
+    body[data-preview="website"] .hero-actions {
+      pointer-events: auto;
     }
 
     .hero-cta {
@@ -382,21 +386,21 @@
       color: var(--sphere-ink-muted);
     }
 
-    /* =========================================================================
-       CONTEXT MODE 3: Wallpaper Frame Preview (`data-preview="wallpaper"`)
-       macOS Sequoia Menu Bar + iPhone Lock Screen Clock Overlay
-       ========================================================================= */
+    /* Wallpaper Frame Preview */
     .wallpaper-preview {
       position: fixed;
       inset: 0;
       z-index: 12;
       pointer-events: none;
+      visibility: hidden;
       opacity: 0;
-      transition: opacity 0.28s ease;
+      transition: opacity 0.28s ease, visibility 0s linear 0.28s;
     }
 
     body[data-preview="wallpaper"] .wallpaper-preview {
       opacity: 1;
+      visibility: visible;
+      transition: opacity 0.28s ease, visibility 0s linear 0s;
     }
 
     .macos-menubar {
@@ -458,23 +462,23 @@
       opacity: 0.90;
     }
 
-    /* Bottom Floating Studio Dock */
+    /* Bottom Floating Studio Dock — Balanced 2-Row Layout (Never Orphans "Hide") */
     .dock-wrap {
       position: fixed;
-      bottom: 20px;
+      bottom: 18px;
       left: 50%;
       transform: translateX(-50%);
       z-index: 30;
+      width: max-content;
       max-width: calc(100vw - 24px);
       transition: opacity 0.28s cubic-bezier(0.16, 1, 0.3, 1), transform 0.28s cubic-bezier(0.16, 1, 0.3, 1);
     }
 
     .dock {
       display: flex;
+      flex-direction: column;
       align-items: center;
-      flex-wrap: wrap;
-      justify-content: center;
-      gap: 7px;
+      gap: 6px;
       padding: 8px 10px;
       border-radius: 22px;
       background: var(--hud-bg);
@@ -483,6 +487,161 @@
       border: 1px solid var(--hud-border);
       box-shadow: var(--hud-shadow);
       color: var(--hud-text);
+    }
+
+    .dock-row {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-wrap: nowrap;
+      gap: 6px;
+      width: 100%;
+    }
+
+    /* Live Procedural Optical Atlases Drawer (0 Bytes Network Raster Assets) */
+    .collections-drawer {
+      position: fixed;
+      bottom: 116px;
+      left: 50%;
+      transform: translateX(-50%) translateY(14px) scale(0.985);
+      z-index: 29;
+      width: min(980px, calc(100vw - 24px));
+      padding: 14px 16px;
+      border-radius: 22px;
+      background: rgba(12, 16, 26, 0.84);
+      backdrop-filter: blur(32px) saturate(1.9);
+      -webkit-backdrop-filter: blur(32px) saturate(1.9);
+      border: 1px solid rgba(255, 255, 255, 0.16);
+      box-shadow: 0 28px 68px rgba(0, 0, 0, 0.42);
+      color: #ffffff;
+      opacity: 0;
+      visibility: hidden;
+      pointer-events: none;
+      transition: opacity 0.22s cubic-bezier(0.16, 1, 0.3, 1), transform 0.22s cubic-bezier(0.16, 1, 0.3, 1), visibility 0s linear 0.22s;
+    }
+
+    .collections-drawer.open {
+      opacity: 1;
+      visibility: visible;
+      pointer-events: auto;
+      transform: translateX(-50%) translateY(0) scale(1);
+      transition: opacity 0.22s cubic-bezier(0.16, 1, 0.3, 1), transform 0.22s cubic-bezier(0.16, 1, 0.3, 1), visibility 0s linear 0s;
+    }
+
+    .drawer-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 10px;
+      flex-wrap: wrap;
+    }
+
+    .drawer-pills {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      overflow-x: auto;
+      padding-bottom: 2px;
+      scrollbar-width: none;
+    }
+    .drawer-pills::-webkit-scrollbar {
+      display: none;
+    }
+
+    .col-pill {
+      appearance: none;
+      border: 1px solid rgba(255, 255, 255, 0.10);
+      background: rgba(255, 255, 255, 0.07);
+      color: rgba(255, 255, 255, 0.78);
+      font-family: var(--font-sans);
+      font-size: 11.5px;
+      font-weight: 560;
+      padding: 5px 10px;
+      border-radius: 999px;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: all 0.14s ease;
+    }
+    .col-pill:hover {
+      color: #fff;
+      background: rgba(255, 255, 255, 0.14);
+    }
+    .col-pill.active {
+      background: #ffffff;
+      color: #090d16;
+      border-color: #ffffff;
+      font-weight: 640;
+    }
+
+    .col-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .col-card {
+      position: relative;
+      border-radius: 14px;
+      overflow: hidden;
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      background: #090d16;
+      cursor: pointer;
+      aspect-ratio: 16 / 10;
+      transition: transform 0.16s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.16s ease, box-shadow 0.16s ease;
+    }
+    .col-card:hover {
+      transform: translateY(-2px);
+      border-color: rgba(255, 255, 255, 0.45);
+      box-shadow: 0 10px 24px rgba(0, 0, 0, 0.35);
+    }
+    .col-card.active {
+      border-color: #6ee7b7;
+      box-shadow: 0 0 0 1px #6ee7b7, 0 10px 24px rgba(0, 0, 0, 0.35);
+    }
+
+    .col-card canvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+      object-fit: cover;
+    }
+
+    .col-card-meta {
+      position: absolute;
+      inset: auto 0 0 0;
+      padding: 18px 10px 8px;
+      background: linear-gradient(to top, rgba(6, 9, 16, 0.82) 0%, rgba(6, 9, 16, 0.38) 65%, transparent 100%);
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 6px;
+      pointer-events: none;
+    }
+
+    .col-card-title {
+      font-size: 11.5px;
+      font-weight: 640;
+      letter-spacing: -0.01em;
+      color: #fff;
+      line-height: 1.15;
+    }
+
+    .col-card-sub {
+      font-size: 10px;
+      color: rgba(255, 255, 255, 0.68);
+      margin-top: 2px;
+    }
+
+    .col-card-badge {
+      font-family: var(--font-mono);
+      font-size: 9.5px;
+      padding: 2px 6px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.16);
+      backdrop-filter: blur(8px);
+      color: #fff;
+      white-space: nowrap;
     }
 
     .btn-generate {
@@ -671,12 +830,15 @@
       right: 16px;
       z-index: 25;
       opacity: 0;
+      visibility: hidden;
       pointer-events: none;
-      transition: opacity 0.25s ease;
+      transition: opacity 0.25s ease, visibility 0s linear 0.25s;
     }
     body.ui-hidden .unhide-pill {
-      opacity: 0.65;
+      opacity: 0.72;
+      visibility: visible;
       pointer-events: auto;
+      transition: opacity 0.25s ease, visibility 0s linear 0s;
     }
     body.ui-hidden .unhide-pill:hover {
       opacity: 1;
@@ -695,12 +857,15 @@
       justify-content: center;
       padding: 20px;
       opacity: 0;
+      visibility: hidden;
       pointer-events: none;
-      transition: opacity 0.2s ease;
+      transition: opacity 0.2s ease, visibility 0s linear 0.2s;
     }
     .modal-backdrop.open {
       opacity: 1;
+      visibility: visible;
       pointer-events: auto;
+      transition: opacity 0.2s ease, visibility 0s linear 0s;
     }
 
     .modal {
@@ -803,6 +968,12 @@
         border-radius: 18px;
         padding: 8px;
       }
+      .dock-row {
+        flex-wrap: wrap;
+      }
+      .col-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
     }
   </style>
 </head>
@@ -819,7 +990,7 @@
       <span class="sep"></span>
       <a class="top-link" href="https://github.com/denissitnikov/sphere-gl" target="_blank" rel="noopener" title="Star sphere-gl on GitHub (MIT)">GitHub ★</a>
       <span class="sep"></span>
-      <a class="top-link" href="https://slidetab.app" target="_blank" rel="noopener" title="Created by Denis S. — Maker of SlideTab for macOS">by SlideTab</a>
+      <a class="top-link" href="https://github.com/denissitnikov" target="_blank" rel="noopener" title="Built by Denis S. on GitHub">by Denis</a>
       <span class="sep"></span>
       <button class="top-link" id="help-btn" title="Keyboard shortcuts (?)">?</button>
     </div>
@@ -827,40 +998,39 @@
     <div class="glass-pill">
       <div class="swatches" id="palette-swatches" title="Click a swatch to copy its HEX color"></div>
       <span class="sep"></span>
-      <span class="archetype-label" id="archetype-label">—</span>
-      <button class="seed-btn" id="copy-seed-btn" title="Copy Studio Preset URL for this exact seed">
+      <span class="archetype-label" id="archetype-label">...</span>
+      <button class="seed-btn" id="copy-seed-btn" title="Copy link to this exact seed">
         <span id="seed-label">#------</span>
         <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
       </button>
     </div>
   </header>
 
-  <!-- Context Preview 2: Live Adaptive Website Hero (`2` or `Website` button) -->
   <section class="website-preview" id="website-preview" aria-hidden="true">
     <div class="hero-eyebrow">
       <span class="hero-eyebrow-dot"></span>
-      <span id="hero-tag-mode">Auto-adaptive --sphere-ink &amp; --sphere-glass CSS tokens</span>
+      <span id="hero-tag-mode">Automatic --sphere-ink &amp; --sphere-glass contrast tokens</span>
     </div>
-    <h1 class="hero-headline">A fresh studio canvas on every visit.</h1>
+    <h1 class="hero-headline">A fresh background on every visit.</h1>
     <p class="hero-sub">
-      22 KB gzip, zero dependencies. Synthesizes never-muddy OKLCH spheres &amp; meshes in &lt;1 ms GPU, while automatically adapting your UI contrast.
+      26 KB gzip, zero dependencies. Picks clean OKLCH colors, draws one sharp WebGL2 frame in under 1 ms, and sets your text and glass colors automatically.
     </p>
     <div class="hero-actions">
-      <button class="hero-cta primary" id="hero-gen-btn">Roll New Palette (Space)</button>
-      <button class="hero-cta secondary" id="hero-code-btn">&lt;/&gt; Copy Embed Snippet</button>
+      <button class="hero-cta primary" id="hero-gen-btn">New Palette (Space)</button>
+      <button class="hero-cta secondary" id="hero-code-btn">&lt;/&gt; Copy Embed Code</button>
     </div>
     <div class="hero-cards">
       <div class="hero-card">
-        <div class="hero-card-title">Never Muddy</div>
-        <div class="hero-card-copy">Analytical OKLab scatter lift bridges opposing blues &amp; oranges cleanly.</div>
+        <div class="hero-card-title">Clean Midtones</div>
+        <div class="hero-card-copy">Blends in OKLab so opposing blues and oranges stay bright instead of turning gray-brown.</div>
       </div>
       <div class="hero-card">
         <div class="hero-card-title">0% Idle Battery</div>
-        <div class="hero-card-copy">Draws 1 Retina frame in ~0.8 ms GPU and sleeps—or drifts at 60fps.</div>
+        <div class="hero-card-copy">Draws once in ~0.8 ms GPU and sleeps, waking only when you move the mouse or resize.</div>
       </div>
       <div class="hero-card">
         <div class="hero-card-title">HTML · CSS · React · Framer</div>
-        <div class="hero-card-copy">Drop in 2 lines of HTML, CSS variables, or paste any Studio URL.</div>
+        <div class="hero-card-copy">Drop in 2 lines of HTML, set CSS variables, or paste any URL from this page.</div>
       </div>
     </div>
   </section>
@@ -888,81 +1058,111 @@
     </div>
   </section>
 
-  <!-- Bottom Floating Studio Dock -->
+  <!-- Live Procedural Optical Atlases Drawer (`P` or `Atlases` button) -->
+  <aside class="collections-drawer" id="collections-drawer" aria-label="Optical Color Atlases">
+    <div class="drawer-header">
+      <div class="drawer-pills" id="collection-pills"></div>
+      <div style="display:flex;align-items:center;gap:6px;">
+        <button class="icon-btn" id="shuffle-col-btn" style="height:28px;font-size:11px;padding:0 10px;" title="Roll fresh infinite variations inside this atlas">↻ Shuffle Atlas</button>
+        <button class="icon-btn" id="close-col-btn" style="height:28px;width:28px;padding:0;" title="Close Atlases (Esc)">✕</button>
+      </div>
+    </div>
+    <div class="col-grid" id="collection-grid"></div>
+  </aside>
+
+  <!-- Bottom Floating Studio Dock (Balanced 2-Row Layout) -->
   <div class="dock-wrap">
     <div class="dock">
-      <button class="icon-btn" id="prev-btn" title="Previous seed (←)" disabled aria-label="Previous seed">←</button>
-      <button class="btn-generate" id="generate-btn" title="Generate new canvas (Space or Click)">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="7.5 4.21 12 6.81 16.5 4.21"/><polyline points="7.5 19.79 7.5 14.6 3 12"/><polyline points="21 12 16.5 14.6 16.5 19.79"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
-        New Color
-        <span class="kbd">Space</span>
-      </button>
-      <button class="icon-btn" id="next-btn" title="Next seed (→)" disabled aria-label="Next seed">→</button>
+      <div class="dock-row">
+        <button class="icon-btn" id="prev-btn" title="Previous seed (←)" disabled aria-label="Previous seed">←</button>
+        <button class="btn-generate" id="generate-btn" title="Generate new canvas (Space or Click)">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="7.5 4.21 12 6.81 16.5 4.21"/><polyline points="7.5 19.79 7.5 14.6 3 12"/><polyline points="21 12 16.5 14.6 16.5 19.79"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
+          New Color
+          <span class="kbd">Space</span>
+        </button>
+        <button class="icon-btn" id="next-btn" title="Next seed (→)" disabled aria-label="Next seed">→</button>
 
-      <span class="sep"></span>
+        <button class="icon-btn" id="collections-btn" title="Browse 8 Optical Color Atlases (P)">
+          <span>✦ Atlases</span>
+          <span class="kbd" style="background:rgba(255,255,255,0.14);color:#fff;">P</span>
+        </button>
 
-      <!-- Geometry Style -->
-      <div class="seg-group" role="group" aria-label="Geometry style" id="style-group">
-        <button class="seg-btn" data-style="auto">Auto</button>
-        <button class="seg-btn" data-style="mesh" title="Organic Watercolor Mesh">Mesh</button>
-        <button class="seg-btn active" data-style="sphere" title="Diffused f/0.95 Macro Spheres">Sphere</button>
-        <button class="seg-btn" data-style="silk" title="Sculpted Satin Ribbon Folds">Silk</button>
+        <span class="sep"></span>
+
+        <!-- Geometry Style (4 Studio Optical Topologies) -->
+        <div class="seg-group" role="group" aria-label="Geometry style" id="style-group">
+          <button class="seg-btn" data-style="auto">Auto</button>
+          <button class="seg-btn" data-style="mesh" title="Organic Watercolor Mesh">Mesh</button>
+          <button class="seg-btn active" data-style="sphere" title="Diffused f/0.95 Macro Spheres">Sphere</button>
+          <button class="seg-btn" data-style="silk" title="Sculpted Satin Ribbon Folds">Silk</button>
+          <button class="seg-btn" data-style="caustic" title="Boreal & Water Caustic Light Cusps">Caustic</button>
+        </div>
+
+        <!-- Palette Mood -->
+        <div class="seg-group" role="group" aria-label="Palette mood" id="mood-group">
+          <button class="seg-btn active" data-mood="system" id="system-mood-btn" title="Automatically aligns Light vs Dark backgrounds with your OS / browser appearance">System</button>
+          <button class="seg-btn" data-mood="any" title="Explore all Light, Split, and Dark harmonies">Any</button>
+          <button class="seg-btn" data-mood="light">Light</button>
+          <button class="seg-btn" data-mood="split">Split</button>
+          <button class="seg-btn" data-mood="dark">Dark</button>
+        </div>
       </div>
 
-      <!-- Palette Mood -->
-      <div class="seg-group" role="group" aria-label="Palette mood" id="mood-group">
-        <button class="seg-btn active" data-mood="system" id="system-mood-btn" title="Automatically aligns Light vs Dark backgrounds with your OS / browser appearance">System</button>
-        <button class="seg-btn" data-mood="any" title="Explore all Light, Split, and Dark harmonies">Any</button>
-        <button class="seg-btn" data-mood="light">Light</button>
-        <button class="seg-btn" data-mood="split">Split</button>
-        <button class="seg-btn" data-mood="dark">Dark</button>
-      </div>
-
-      <!-- Harmony Selector -->
-      <select class="studio-select" id="archetype-select" aria-label="Color harmony archetype">
-        <option value="auto">All Harmonies</option>
-      </select>
-
-      <span class="sep"></span>
-
-      <button class="icon-btn" id="grain-btn" title="Cycle film grain intensity (G)">Grain: Editorial</button>
-      <button class="icon-btn" id="motion-btn" title="Toggle 60fps drift vs 0% static frame (M)">Static 0%</button>
-
-      <!-- 3-Way Context Switcher: Canvas | Website | Wallpaper -->
-      <div class="seg-group" role="group" aria-label="Preview overlay" id="preview-group">
-        <button class="seg-btn active" data-prev="canvas" title="Pure Canvas (1)">Canvas</button>
-        <button class="seg-btn" data-prev="website" title="Preview Adaptive Website Hero UI (2 or T)">Website</button>
-        <button class="seg-btn" data-prev="wallpaper" title="Preview macOS / iPhone Frame (3)">OS Frame</button>
-      </div>
-
-      <div class="export-group">
-        <select class="studio-select" id="res-select" aria-label="Wallpaper resolution" style="max-width: 138px;">
-          <option value="3840x2160" data-dev="desktop">4K UHD</option>
-          <option value="5120x2880" data-dev="desktop">5K Studio</option>
-          <option value="3456x2234" data-dev="desktop">MacBook 16"</option>
-          <option value="5120x2160" data-dev="desktop">Ultrawide</option>
-          <option value="1320x2868" data-dev="mobile">iPhone Pro</option>
+      <div class="dock-row">
+        <!-- Harmony Selector -->
+        <select class="studio-select" id="archetype-select" aria-label="Color harmony archetype">
+          <option value="auto">All Harmonies</option>
         </select>
-        <button class="icon-btn" id="export-btn" title="Download high-res PNG wallpaper (E)">PNG ↓</button>
-      </div>
 
-      <button class="btn-embed-cta" id="code-btn" title="Use on your website: HTML, CSS, React, Framer">&lt;/&gt; Use Free</button>
-      <button class="icon-btn" id="hide-ui-btn" title="Hide UI (H)">Hide</button>
+        <button class="icon-btn" id="grain-btn" title="Cycle film grain intensity (G)">Grain: Editorial</button>
+        <button class="icon-btn active" id="whisper-btn" title="Solas Light: wake-on-move grazing studio keylight follows your cursor and sleeps at 0% idle when still (L)">Solas Light ✦</button>
+        <button class="icon-btn" id="motion-btn" title="Toggle continuous 60fps drift vs 0% static frame (M)">Static 0%</button>
+
+        <span class="sep"></span>
+
+        <!-- 3-Way Context Switcher: Canvas | Website | Wallpaper -->
+        <div class="seg-group" role="group" aria-label="Preview overlay" id="preview-group">
+          <button class="seg-btn active" data-prev="canvas" title="Pure Canvas (1)">Canvas</button>
+          <button class="seg-btn" data-prev="website" title="Preview Adaptive Website Hero UI (2 or T)">Website</button>
+          <button class="seg-btn" data-prev="wallpaper" title="Preview macOS / iPhone Frame (3)">OS Frame</button>
+        </div>
+
+        <div class="export-group">
+          <select class="studio-select" id="res-select" aria-label="Wallpaper resolution" style="max-width: 124px;">
+            <option value="3840x2160" data-dev="desktop">4K UHD</option>
+            <option value="5120x2880" data-dev="desktop">5K Studio</option>
+            <option value="3456x2234" data-dev="desktop">MacBook 16"</option>
+            <option value="5120x2160" data-dev="desktop">Ultrawide</option>
+            <option value="1320x2868" data-dev="mobile">iPhone Pro</option>
+            <option value="1200x630" data-dev="desktop">OG 1200×630</option>
+          </select>
+          <select class="studio-select" id="fmt-select" aria-label="Export format" style="max-width: 82px;">
+            <option value="png">PNG</option>
+            <option value="webp">WebP</option>
+            <option value="jpg">JPG</option>
+            <option value="svg">SVG</option>
+            <option value="css">CSS</option>
+          </select>
+          <button class="icon-btn" id="export-btn" title="Export wallpaper or copy CSS in selected format (E)">PNG ↓</button>
+        </div>
+
+        <button class="btn-embed-cta" id="code-btn" title="Use on your website: HTML, CSS, React, Framer">&lt;/&gt; Use Free</button>
+        <button class="icon-btn" id="hide-ui-btn" title="Hide UI (H)">Hide</button>
+      </div>
     </div>
   </div>
 
   <button class="glass-pill unhide-pill" id="unhide-btn" style="cursor:pointer;">Show Studio (H)</button>
   <div class="toast" id="toast">Copied!</div>
 
-  <!-- Multi-Framework Integration Modal -->
   <div class="modal-backdrop" id="code-modal">
     <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
       <div class="modal-header">
-        <div class="modal-title" id="modal-title">Add sphere-gl to Your Website (22 KB gzip · MIT · Zero Deps)</div>
+        <div class="modal-title" id="modal-title">Add sphere-gl to Your Site (26 KB gzip · MIT · Zero Deps)</div>
         <button class="icon-btn" id="close-modal-btn">✕</button>
       </div>
       <p class="modal-desc">
-        Synthesizes a Retina WebGL2 canvas in <strong>~0.8 ms</strong> (<code>0%</code> idle GPU) and automatically sets <code>data-sphere-theme="light|dark"</code> + <code>--sphere-ink</code> / <code>--sphere-glass</code> tokens on your container.
+        Draws a Retina WebGL2 background in <strong>~0.8 ms</strong> (<code>0%</code> idle GPU), matches OS light/dark mode, and sets <code>--sphere-ink</code> and <code>--sphere-glass</code> on your container so your text stays readable.
       </p>
       <div class="modal-controls">
         <div class="seg-group" id="snippet-api-group">
@@ -999,6 +1199,8 @@
         <div class="shortcut-row"><span>Pure Canvas</span><span class="shortcut-key">1</span></div>
         <div class="shortcut-row"><span>Website UI Preview</span><span class="shortcut-key">2 / T</span></div>
         <div class="shortcut-row"><span>OS Wallpaper Frame</span><span class="shortcut-key">3</span></div>
+        <div class="shortcut-row"><span>Optical Atlases Drawer</span><span class="shortcut-key">P</span></div>
+        <div class="shortcut-row"><span>Toggle Solas Light</span><span class="shortcut-key">L</span></div>
         <div class="shortcut-row"><span>Cycle Film Grain</span><span class="shortcut-key">G</span></div>
         <div class="shortcut-row"><span>Toggle 60fps Drift</span><span class="shortcut-key">M</span></div>
         <div class="shortcut-row"><span>Download PNG</span><span class="shortcut-key">E</span></div>
@@ -1012,6 +1214,7 @@
     import {
       SphereRenderer,
       ARCHETYPES,
+      COLLECTIONS,
       generateScene,
       randomSeed,
       parsePresetUrl,
@@ -1019,7 +1222,7 @@
       detectColorScheme,
     } from './src/index.js';
 
-    const VERSION = 'v1.2.0';
+    const VERSION = 'v1.3.0';
     const CDN_SCRIPT = `https://cdn.jsdelivr.net/gh/denissitnikov/sphere-gl@${VERSION}/dist/sphere-gl.min.js`;
     const CDN_ESM = `https://cdn.jsdelivr.net/gh/denissitnikov/sphere-gl@${VERSION}/dist/sphere-gl.esm.min.js`;
     const CDN_FRAMER = `https://cdn.jsdelivr.net/gh/denissitnikov/sphere-gl@${VERSION}/dist/sphere-gl.framer.js`;
@@ -1076,9 +1279,29 @@
     let styleFilter = 'sphere';
     let moodFilter = 'system';
     let archetypeFilter = 'auto';
+    let collectionFilter = null;
+    let whisperEnabled = true;
     let motionEnabled = false;
     let snippetMode = 'random';
     let snippetApi = 'html';
+
+    const collectionsDrawer = document.getElementById('collections-drawer');
+    const collectionsBtn = document.getElementById('collections-btn');
+    const collectionPillsEl = document.getElementById('collection-pills');
+    const collectionGridEl = document.getElementById('collection-grid');
+    const whisperBtn = document.getElementById('whisper-btn');
+
+    // Single Shared Offscreen WebGL2 Thumbnail Baker (0 bytes JPEG, <2 ms for 8 live cards)
+    const offscreenThumbCanvas = document.createElement('canvas');
+    offscreenThumbCanvas.width = 240;
+    offscreenThumbCanvas.height = 150;
+    let thumbRenderer = null;
+    function getThumbRenderer() {
+      if (!thumbRenderer) {
+        thumbRenderer = new SphereRenderer(offscreenThumbCanvas, { maxDpr: 1 });
+      }
+      return thumbRenderer;
+    }
 
     const systemMoodBtn = document.getElementById('system-mood-btn');
     function updateSystemMoodBadge() {
@@ -1092,8 +1315,8 @@
       const onOsSchemeChange = () => {
         updateSystemMoodBadge();
         if (moodFilter === 'system') {
-          pushNewScene();
-          showToast(`Synced with OS ${detectColorScheme() === 'dark' ? 'Dark' : 'Light'} Mode`);
+          pushNewScene({ seed: currentScene?.seed, morph: true });
+          showToast(`Morphed to OS ${detectColorScheme() === 'dark' ? 'Dark' : 'Light'} Mode`);
         }
       };
       if (osMq.addEventListener) osMq.addEventListener('change', onOsSchemeChange);
@@ -1122,7 +1345,13 @@
       onTiming({ cpuMs, gpuMs, width, height, backend }) {
         const gpuText = formatMs(gpuMs);
         const cpuText = formatMs(cpuMs) || '0.10';
-        const idleTag = motionEnabled ? '60fps' : '0% idle';
+        const idleTag = motionEnabled
+          ? '60fps'
+          : renderer.isMorphing
+            ? 'OKLab Morph'
+            : renderer.isWhispering
+              ? 'Solas ✦'
+              : '0% idle';
         if (gpuText !== null) {
           perfReadout.innerHTML = `<strong>${gpuText} ms</strong> GPU · ${width}×${height} · ${idleTag}`;
         } else {
@@ -1135,9 +1364,10 @@
       const grainScale = GRAIN_PRESETS[grainIdx].scale;
       const params = new URLSearchParams();
       params.set('seed', scene.seed);
+      if (scene.collection) params.set('col', scene.collection);
       params.set('style', scene.style);
       params.set('mood', scene.mood);
-      if (scene.archetypeId && scene.archetypeId !== 'custom-palette') {
+      if (scene.archetypeId && scene.archetypeId !== 'custom-palette' && !scene.collection) {
         params.set('arch', scene.archetypeId);
       }
       params.set('grain', String(grainScale));
@@ -1160,9 +1390,13 @@
     function updateUIForScene(scene) {
       applyAdaptiveTokensToBody(scene);
       const stylePretty = scene.style.charAt(0).toUpperCase() + scene.style.slice(1);
-      archetypeLabel.textContent = `${scene.archetypeName} · ${stylePretty}`;
+      const colMeta = scene.collection ? COLLECTIONS.find((c) => c.id === scene.collection) : null;
+      const titlePrefix = colMeta ? `${colMeta.name}` : scene.archetypeName;
+      archetypeLabel.textContent = `${titlePrefix} · ${stylePretty}`;
       seedLabel.textContent = `#${scene.seed}`;
-      heroTagMode.textContent = `${scene.archetypeName} • ${stylePretty} • Theme: ${scene.uiTokens.theme.toUpperCase()}`;
+      heroTagMode.textContent = `${titlePrefix} • ${stylePretty} • Theme: ${scene.uiTokens.theme.toUpperCase()}`;
+
+      collectionsBtn.classList.toggle('active', Boolean(collectionFilter) || collectionsDrawer.classList.contains('open'));
 
       swatchesEl.innerHTML = '';
       for (const hex of scene.paletteSwatches) {
@@ -1186,13 +1420,15 @@
       }
     }
 
-    function renderActiveScene() {
+    function renderActiveScene({ morph = false, prevScene = null } = {}) {
       if (!currentScene) return;
       const grainScale = GRAIN_PRESETS[grainIdx].scale;
       renderer.resize();
       if (motionEnabled) {
         renderer.stopMotion();
         renderer.startMotion(currentScene, { grainScale });
+      } else if (morph && prevScene) {
+        renderer.morphTo(currentScene, { grainScale, duration: 520 });
       } else {
         renderer.stopMotion();
         renderer.renderOnce(currentScene, { grainScale });
@@ -1201,11 +1437,14 @@
     }
 
     function pushNewScene(overrides = {}) {
+      const prevScene = currentScene;
+      const activeCol = overrides.collection !== undefined ? overrides.collection : collectionFilter;
       const scene = generateScene({
         seed: overrides.seed || randomSeed(),
         style: overrides.style ?? styleFilter,
         mood: overrides.mood ?? moodFilter,
         archetype: overrides.archetype ?? archetypeFilter,
+        collection: activeCol,
         colors: overrides.colors ?? null,
       });
 
@@ -1217,12 +1456,173 @@
       historyIndex = history.length - 1;
 
       currentScene = scene;
-      renderActiveScene();
+      renderActiveScene({ morph: Boolean(overrides.morph && prevScene), prevScene });
     }
+
+    // Live Procedural Collections Drawer UI & Single-Context Thumbnail Baker
+    function renderCollectionsDrawer() {
+      collectionPillsEl.innerHTML = '';
+      const allBtn = document.createElement('button');
+      allBtn.className = `col-pill${!collectionFilter ? ' active' : ''}`;
+      allBtn.textContent = 'All 8 Atlases';
+      allBtn.addEventListener('click', () => {
+        collectionFilter = null;
+        renderCollectionsDrawer();
+      });
+      collectionPillsEl.appendChild(allBtn);
+
+      for (const col of COLLECTIONS) {
+        const pill = document.createElement('button');
+        pill.className = `col-pill${collectionFilter === col.id ? ' active' : ''}`;
+        pill.textContent = col.name;
+        pill.addEventListener('click', () => {
+          collectionFilter = col.id;
+          styleFilter = col.style || styleFilter;
+          for (const b of document.querySelectorAll('[data-style]')) {
+            b.classList.toggle('active', b.dataset.style === styleFilter);
+          }
+          renderCollectionsDrawer();
+          pushNewScene({
+            seed: col.heroes[0],
+            collection: col.id,
+            style: col.style,
+            mood: col.mood || moodFilter,
+            morph: true,
+          });
+        });
+        collectionPillsEl.appendChild(pill);
+      }
+
+      collectionGridEl.innerHTML = '';
+      const baker = getThumbRenderer();
+      const grainScale = GRAIN_PRESETS[grainIdx].scale;
+
+      if (!collectionFilter) {
+        // Overview mode: 1 live procedural card per Collection (8 cards total)
+        for (const col of COLLECTIONS) {
+          const heroSeed = col.heroes[0];
+          const previewScene = generateScene({
+            seed: heroSeed,
+            collection: col.id,
+            style: col.style,
+            mood: col.mood || moodFilter,
+          });
+          baker.renderOnce(previewScene, { grainScale });
+
+          const card = document.createElement('div');
+          card.className = `col-card${currentScene?.collection === col.id ? ' active' : ''}`;
+          const c = document.createElement('canvas');
+          c.width = 240;
+          c.height = 150;
+          c.getContext('2d').drawImage(offscreenThumbCanvas, 0, 0, 240, 150);
+
+          const meta = document.createElement('div');
+          meta.className = 'col-card-meta';
+          meta.innerHTML = `
+            <div>
+              <div class="col-card-title">${col.name}</div>
+              <div class="col-card-sub">${col.tag} · ${col.style}</div>
+            </div>
+            <span class="col-card-badge">4 Heroes + ∞</span>
+          `;
+          card.appendChild(c);
+          card.appendChild(meta);
+          card.addEventListener('click', () => {
+            collectionFilter = col.id;
+            styleFilter = col.style || styleFilter;
+            for (const b of document.querySelectorAll('[data-style]')) {
+              b.classList.toggle('active', b.dataset.style === styleFilter);
+            }
+            pushNewScene({
+              seed: heroSeed,
+              collection: col.id,
+              style: col.style,
+              mood: col.mood || moodFilter,
+              morph: true,
+            });
+            renderCollectionsDrawer();
+          });
+          collectionGridEl.appendChild(card);
+        }
+      } else {
+        // Active Collection mode: 4 Curated Heroes + 4 Fresh Infinite Seeds
+        const col = COLLECTIONS.find((c) => c.id === collectionFilter) || COLLECTIONS[0];
+        const seeds = [
+          ...col.heroes.slice(0, 4).map((s, i) => ({ seed: s, label: `Hero 0${i + 1}`, badge: `#${s}` })),
+          ...Array.from({ length: 4 }, (_, i) => {
+            const s = randomSeed();
+            return { seed: s, label: `Live Procedural 0${i + 1}`, badge: `#${s}` };
+          }),
+        ];
+        for (const item of seeds) {
+          const previewScene = generateScene({
+            seed: item.seed,
+            collection: col.id,
+            style: col.style,
+            mood: col.mood || moodFilter,
+          });
+          baker.renderOnce(previewScene, { grainScale });
+
+          const card = document.createElement('div');
+          card.className = `col-card${currentScene?.seed === item.seed ? ' active' : ''}`;
+          const c = document.createElement('canvas');
+          c.width = 240;
+          c.height = 150;
+          c.getContext('2d').drawImage(offscreenThumbCanvas, 0, 0, 240, 150);
+
+          const meta = document.createElement('div');
+          meta.className = 'col-card-meta';
+          meta.innerHTML = `
+            <div>
+              <div class="col-card-title">${item.label}</div>
+              <div class="col-card-sub">${col.name}</div>
+            </div>
+            <span class="col-card-badge">${item.badge}</span>
+          `;
+          card.appendChild(c);
+          card.appendChild(meta);
+          card.addEventListener('click', () => {
+            pushNewScene({
+              seed: item.seed,
+              collection: col.id,
+              style: col.style,
+              mood: col.mood || moodFilter,
+              morph: true,
+            });
+            for (const el of collectionGridEl.querySelectorAll('.col-card')) {
+              el.classList.remove('active');
+            }
+            card.classList.add('active');
+          });
+          collectionGridEl.appendChild(card);
+        }
+      }
+    }
+
+    function toggleCollectionsDrawer(force) {
+      const nextOpen = force !== undefined ? force : !collectionsDrawer.classList.contains('open');
+      collectionsDrawer.classList.toggle('open', nextOpen);
+      collectionsBtn.classList.toggle('active', nextOpen || Boolean(collectionFilter));
+      if (nextOpen) renderCollectionsDrawer();
+    }
+
+    collectionsBtn.addEventListener('click', () => toggleCollectionsDrawer());
+    document.getElementById('close-col-btn').addEventListener('click', () => toggleCollectionsDrawer(false));
+    document.getElementById('shuffle-col-btn').addEventListener('click', () => {
+      if (!collectionFilter) {
+        const randomCol = COLLECTIONS[Math.floor(Math.random() * COLLECTIONS.length)];
+        collectionFilter = randomCol.id;
+      }
+      renderCollectionsDrawer();
+      pushNewScene({ morph: true });
+    });
 
     function initFromUrlOrDefault() {
       const parsed = parsePresetUrl(window.location.href);
-      if (parsed.seed || parsed.style || parsed.colors) {
+      if (parsed.seed || parsed.style || parsed.colors || parsed.collection) {
+        if (parsed.collection) {
+          collectionFilter = parsed.collection;
+        }
         if (parsed.style) {
           styleFilter = parsed.style;
           for (const b of document.querySelectorAll('[data-style]')) {
@@ -1252,6 +1652,7 @@
           style: parsed.style || 'sphere',
           mood: parsed.mood || moodFilter,
           archetype: parsed.harmony || 'auto',
+          collection: parsed.collection || null,
           colors: parsed.colors || null,
         });
         return;
@@ -1259,13 +1660,25 @@
       pushNewScene();
     }
 
-    canvas.addEventListener('click', () => pushNewScene());
+    canvas.addEventListener('click', () => {
+      if (collectionsDrawer.classList.contains('open')) {
+        toggleCollectionsDrawer(false);
+        return;
+      }
+      pushNewScene({ morph: true });
+    });
 
     window.addEventListener('pointermove', (e) => {
-      if (!motionEnabled) return;
       const nx = (e.clientX / Math.max(1, window.innerWidth)) * 2 - 1;
       const ny = (e.clientY / Math.max(1, window.innerHeight)) * 2 - 1;
-      renderer.setPointer(nx, ny);
+      if (motionEnabled) {
+        renderer.setPointer(nx, ny);
+      } else if (whisperEnabled) {
+        renderer.wakePointer(nx, ny, {
+          strength: 1.0,
+          grainScale: GRAIN_PRESETS[grainIdx].scale,
+        });
+      }
     }, { passive: true });
 
     let resizeRaf = 0;
@@ -1279,22 +1692,24 @@
       });
     });
 
-    document.getElementById('generate-btn').addEventListener('click', () => pushNewScene());
-    document.getElementById('hero-gen-btn').addEventListener('click', () => pushNewScene());
+    document.getElementById('generate-btn').addEventListener('click', () => pushNewScene({ morph: true }));
+    document.getElementById('hero-gen-btn').addEventListener('click', () => pushNewScene({ morph: true }));
 
     prevBtn.addEventListener('click', () => {
       if (historyIndex > 0) {
+        const prevScene = currentScene;
         historyIndex--;
         currentScene = history[historyIndex];
-        renderActiveScene();
+        renderActiveScene({ morph: true, prevScene });
       }
     });
 
     nextBtn.addEventListener('click', () => {
       if (historyIndex < history.length - 1) {
+        const prevScene = currentScene;
         historyIndex++;
         currentScene = history[historyIndex];
-        renderActiveScene();
+        renderActiveScene({ morph: true, prevScene });
       }
     });
 
@@ -1308,6 +1723,7 @@
       pushNewScene({
         seed: styleFilter === 'auto' ? randomSeed() : currentScene?.seed,
         style: styleFilter,
+        morph: true,
       });
     });
 
@@ -1333,11 +1749,13 @@
           archetypeSelect.value = 'auto';
         }
       }
-      pushNewScene();
+      // Keep the same seed when switching Light <-> Split <-> Dark so lockGeometrySeed glides Day <-> Night!
+      pushNewScene({ seed: currentScene?.seed, morph: true });
     });
 
     archetypeSelect.addEventListener('change', () => {
       archetypeFilter = archetypeSelect.value;
+      collectionFilter = null;
       if (archetypeFilter !== 'auto') {
         const meta = ARCHETYPES.find((a) => a.id === archetypeFilter);
         if (meta && meta.mood && meta.mood !== 'auto') {
@@ -1347,7 +1765,7 @@
           }
         }
       }
-      pushNewScene();
+      pushNewScene({ morph: true });
     });
 
     function cycleGrain() {
@@ -1356,6 +1774,17 @@
       renderActiveScene();
     }
     grainBtn.addEventListener('click', cycleGrain);
+
+    function toggleWhisper() {
+      whisperEnabled = !whisperEnabled;
+      whisperBtn.textContent = whisperEnabled ? 'Solas Light ✦' : 'Solas: Off';
+      whisperBtn.classList.toggle('active', whisperEnabled);
+      if (!whisperEnabled && currentScene) {
+        renderer.wakePointer(0, 0, { strength: 0, grainScale: GRAIN_PRESETS[grainIdx].scale });
+      }
+      showToast(whisperEnabled ? 'Solas Light enabled (0% idle when mouse rests)' : 'Solas Light disabled');
+    }
+    whisperBtn.addEventListener('click', toggleWhisper);
 
     function toggleMotion() {
       motionEnabled = !motionEnabled;
@@ -1379,9 +1808,15 @@
       setPreviewMode(btn.dataset.prev);
     });
 
+    const fmtSelect = document.getElementById('fmt-select');
     resSelect.addEventListener('change', () => {
       const opt = resSelect.selectedOptions[0];
       document.body.dataset.wallpaperDevice = opt?.dataset.dev || 'desktop';
+    });
+
+    fmtSelect.addEventListener('change', () => {
+      const fmt = fmtSelect.value;
+      exportBtn.textContent = fmt === 'css' ? 'Copy CSS' : `${fmt.toUpperCase()} ↓`;
     });
 
     function toggleUiHidden() {
@@ -1397,6 +1832,14 @@
 
     async function downloadWallpaper() {
       if (!currentScene) return;
+      const fmt = fmtSelect.value || 'png';
+      if (fmt === 'css') {
+        const cssText = renderer.exportCSS(currentScene);
+        await navigator.clipboard?.writeText(cssText);
+        showToast(`Copied Pure CSS Radial Fallback for #${currentScene.seed}`);
+        return;
+      }
+
       const [wStr, hStr] = resSelect.value.split('x');
       const width = Number(wStr) || 3840;
       const height = Number(hStr) || 2160;
@@ -1405,21 +1848,24 @@
       exportBtn.disabled = true;
       try {
         const t0 = performance.now();
-        const blob = await renderer.exportPNG(currentScene, {
+        const blob = await renderer.exportImage(currentScene, {
           width,
           height,
+          format: fmt,
+          quality: 0.94,
           grainScale: GRAIN_PRESETS[grainIdx].scale,
         });
         const elapsed = Math.round(performance.now() - t0);
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `sphere-gl-${currentScene.style}-${currentScene.seed.toLowerCase()}-${width}x${height}.png`;
+        a.download = `sphere-gl-${currentScene.style}-${currentScene.seed.toLowerCase()}-${width}x${height}.${fmt}`;
         document.body.appendChild(a);
         a.click();
         a.remove();
         setTimeout(() => URL.revokeObjectURL(url), 5000);
-        showToast(`Downloaded ${width}×${height} PNG (${elapsed} ms)`);
+        const sizeKb = Math.max(1, Math.round(blob.size / 1024));
+        showToast(`Exported ${width}×${height} ${fmt.toUpperCase()} (${sizeKb} KB · ${elapsed} ms)`);
       } catch (err) {
         console.error(err);
         showToast('Export failed — see console');
@@ -1435,6 +1881,7 @@
       const grainScale = GRAIN_PRESETS[grainIdx].scale;
       const st = snippetMode === 'locked' ? currentScene.style : styleFilter;
       const md = snippetMode === 'locked' ? currentScene.mood : moodFilter;
+      const col = currentScene.collection || collectionFilter || null;
       const ar = snippetMode === 'locked' ? currentScene.archetypeId : archetypeFilter;
       const sw = currentScene.paletteSwatches;
       const presetLink = formatPresetUrl(currentScene, {
@@ -1447,12 +1894,12 @@
       if (snippetApi === 'html') {
         const seedAttr = snippetMode === 'locked' ? `\n  data-sphere-seed="${currentScene.seed}"` : '';
         const colorsAttr = snippetMode === 'custom' ? `\n  data-sphere-colors="${sw.slice(0, 4).join(',')}"` : '';
-        const archAttr = snippetMode !== 'custom' && ar !== 'auto' ? `\n  data-sphere-harmony="${ar}"` : '';
+        const atlasAttr = snippetMode !== 'custom' && col ? `\n  data-sphere-atlas="${col}"` : '';
+        const archAttr = snippetMode !== 'custom' && !col && ar !== 'auto' ? `\n  data-sphere-harmony="${ar}"` : '';
         const motionAttr = motionEnabled ? `\n  data-sphere-motion="true"` : '';
-        snippetCode.textContent = `<!-- Zero inline JS · Strict-CSP safe when self-hosted -->
-<body
+        snippetCode.textContent = `<body
   data-sphere-bg
-  data-transition-in${seedAttr}${colorsAttr}
+  data-transition-in${seedAttr}${colorsAttr}${atlasAttr}
   data-sphere-style="${st}"
   data-sphere-mood="${md}"${archAttr}
   data-sphere-grain="${grainScale}"${motionAttr}
@@ -1463,10 +1910,11 @@
       } else if (snippetApi === 'css') {
         const customVars =
           snippetMode === 'custom'
-            ? `  /* Custom palette rendered in OKLab with anti-muddy scatter lift */\n  --sphere-color-1: ${sw[0]};\n  --sphere-color-2: ${sw[1]};\n  --sphere-color-3: ${sw[2]};\n  --sphere-color-4: ${sw[3] || sw[1]};\n`
-            : `  /* Leave --sphere-color-* unset for fresh OKLCH harmony every visit! */\n`;
-        snippetCode.textContent = `/* Configure via CSS variables (whatamesh-style) & consume adaptive UI tokens */
-#hero {
+            ? `  --sphere-color-1: ${sw[0]};\n  --sphere-color-2: ${sw[1]};\n  --sphere-color-3: ${sw[2]};\n  --sphere-color-4: ${sw[3] || sw[1]};\n`
+            : col
+              ? `  --sphere-atlas: ${col};\n`
+              : '';
+        snippetCode.textContent = `#hero {
 ${customVars}  --sphere-style: ${st};
   --sphere-grain: ${grainScale};
   color: var(--sphere-ink);
@@ -1478,18 +1926,17 @@ ${customVars}  --sphere-style: ${st};
   backdrop-filter: blur(24px);
 }
 
-<!-- HTML -->
 <section id="hero" data-sphere-bg data-transition-in>...</section>
 <script src="${CDN_SCRIPT}" defer><\/script>`;
       } else if (snippetApi === 'react') {
+        const atlasLine = col && snippetMode !== 'custom' ? `\n      atlas="${col}"` : '';
         const propLines =
           snippetMode === 'locked'
             ? `url="${presetLink}"`
             : snippetMode === 'custom'
               ? `mode="${st}"\n      colors={${JSON.stringify(sw.slice(0, 4))}}\n      grain={${grainScale}}`
-              : `mode="${st}"\n      mood="${md}"\n      grain={${grainScale}}`;
-        snippetCode.textContent = `// npm install sphere-gl
-import { SphereBackground } from 'sphere-gl/react';
+              : `mode="${st}"\n      mood="${md}"${atlasLine}\n      grain={${grainScale}}`;
+        snippetCode.textContent = `import { SphereBackground } from 'sphere-gl/react';
 
 export function Hero() {
   return (
@@ -1503,18 +1950,13 @@ export function Hero() {
   );
 }`;
       } else if (snippetApi === 'framer') {
-        snippetCode.textContent = `// In Framer: Assets → Code → Create Code File (or Import from URL)
-// Paste this 2-line re-export to get native Framer right-sidebar controls:
+        snippetCode.textContent = `export { default } from "${CDN_FRAMER}"
 
-export { default } from "${CDN_FRAMER}"
-
-// Tip: Set Palette → "Studio URL" in Framer's sidebar and paste:
+// Paste Studio URL in Framer's sidebar:
 // ${presetLink}`;
       } else {
-        snippetCode.textContent = `/* Paste this Studio Preset URL into HTML, React, or Framer: */
-${presetLink}
+        snippetCode.textContent = `${presetLink}
 
-<!-- HTML Preset URL Shorthand -->
 <body data-sphere-bg data-sphere-preset="${presetLink}">
   <script src="${CDN_SCRIPT}" defer><\/script>
 </body>`;
@@ -1568,13 +2010,14 @@ ${presetLink}
       if (e.key === 'Escape') {
         codeModal.classList.remove('open');
         helpModal.classList.remove('open');
+        toggleCollectionsDrawer(false);
         return;
       }
       if (codeModal.classList.contains('open') || helpModal.classList.contains('open')) return;
 
       if (e.code === 'Space') {
         e.preventDefault();
-        pushNewScene();
+        pushNewScene({ morph: true });
       } else if (e.key === 'ArrowLeft') {
         e.preventDefault();
         prevBtn.click();
@@ -1589,6 +2032,10 @@ ${presetLink}
       } else if (e.key === '3') {
         const next = document.body.dataset.preview === 'wallpaper' ? 'canvas' : 'wallpaper';
         setPreviewMode(next);
+      } else if (e.key === 'p' || e.key === 'P') {
+        toggleCollectionsDrawer();
+      } else if (e.key === 'l' || e.key === 'L') {
+        toggleWhisper();
       } else if (e.key === 'h' || e.key === 'H') {
         toggleUiHidden();
       } else if (e.key === 'm' || e.key === 'M') {

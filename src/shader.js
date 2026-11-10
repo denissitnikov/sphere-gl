@@ -1,29 +1,13 @@
-/**
- * SphereRenderer — Studio-Grade Procedural WebGL2 Background Engine
- *
- * Zero-dependency ES module (`#version 300 es`) engineered for sub-millisecond
- * 4K/Retina execution on Apple Silicon Metal, ANGLE, and mobile GPUs.
- *
- * Architectural pillars:
- *  1. Bufferless single fullscreen triangle (`gl_VertexID` 0, 1, 2).
- *  2. Isotropic aspect-corrected metric coordinates so spheres remain 100% round
- *     across 32:9 ultrawide, 16:9 desktop, and 9:16 mobile portrait viewports.
- *  3. Three distinct art-directed rendering modes:
- *     - `mesh`   (0): 2-octave curl-warped simplex watercolor & silk clouds.
- *     - `sphere` (1): Wide-aperture (f/0.95) 3D volumetric spheres with C2 quintic
- *                     optical blur, atmospheric halo, and directional 3D light wrap.
- *     - `silk`   (2): Laminar flow-warped liquid satin ribbons with harmonic sheen crests.
- *  4. Anti-muddy perceptual OKLab accumulation with analytical chroma-loss detection,
- *     atmospheric light-scattering lift (`L`), and opposing-chord `bridgeDir` arc.
- *  5. Exact Björn Ottosson OKLab -> Linear sRGB + C1 hue-preserving soft-shoulder
- *     gamut compression + exact sRGB transfer + 32-bit PCG triangular-PDF film grain.
- */
-
-const STYLE_MAP = {
+export const STYLE_MAP = {
   mesh: 0,
   sphere: 1,
   silk: 2,
+  caustic: 3,
 };
+
+export function styleToIndex(style) {
+  return STYLE_MAP[style] ?? 0;
+}
 
 const MOOD_MAP = {
   light: 0,
@@ -39,7 +23,7 @@ out vec2 v_uv;
 void main() {
     float x = (gl_VertexID == 1) ? 3.0 : -1.0;
     float y = (gl_VertexID == 2) ? 3.0 : -1.0;
-    // CSS UV convention: (0, 0) top-left -> (1, 1) bottom-right
+    // Top-left (0, 0) to bottom-right (1, 1) CSS UV space
     v_uv = vec2(0.5 * (x + 1.0), 0.5 * (1.0 - y));
     gl_Position = vec4(x, y, 0.0, 1.0);
 }
@@ -52,106 +36,66 @@ precision highp int;
 in vec2 v_uv;
 out vec4 fragColor;
 
-// xy = framebuffer (width, height), zw = isotropic metric scale (width/ref, height/ref)
+// xy = framebuffer px, zw = isotropic metric scale (width/ref, height/ref)
 uniform vec4 u_viewport;
-// x = style (0=mesh, 1=sphere, 2=silk), y = isDark (0|1), z = time, w = mood (0|1|2)
+// x = style (0=mesh, 1=sphere, 2=silk, 3=caustic), y = isDark (0..1), z = time, w = mood
 uniform vec4 u_modeTime;
-// Base & atmospheric bloom colors in perceptual OKLab (L, a, b)
 uniform vec3 u_baseLab;
 uniform vec3 u_bloomLab;
-// xy = bloomPos (CSS UV 0..1), z = bloomRadius, w = bloomStrength
+// xy = bloomPos, z = bloomRadius, w = bloomStrength
 uniform vec4 u_bloomGeom;
-// xy = bridgeDir (2D unit vector in OKLab a,b), zw = pointer offset (-1..1)
+// xy = bridgeDir (unit OKLab a,b), zw = pointer (-1..1)
 uniform vec4 u_bridgePointer;
 // xy = warp.phase, z = warp.scale, w = warp.amount
 uniform vec4 u_warpParams;
-// xy = flowDir (cos(flowAngle), sin(flowAngle)), z = warp.foldStrength, w = unused
+// xy = flowDir (cos, sin), z = foldStrength, w = whisperAmt
 uniform vec4 u_flowFold;
 // x = scatterLift, y = chromaPreserve, z = vignette, w = effectiveGrain
 uniform vec4 u_lighting;
-// 32-bit PCG seed derived from scene.seed
 uniform uint u_grainSeed;
 
-// Prepacked 6-pole uniform arrays (zero per-pixel trig or division):
-// u_poleLabWeight[i]  = (L, a, b, weight)
-// u_polePosRadSoft[i] = (posX, posY, radius, softness)
-// u_poleTransform[i]  = (invStretchX, invStretchY, cosAngle, sinAngle)
+// (L, a, b, weight), (posX, posY, radius, softness), (invSx, invSy, cosA, sinA)
 uniform vec4 u_poleLabWeight[6];
 uniform vec4 u_polePosRadSoft[6];
 uniform vec4 u_poleTransform[6];
 
-// -----------------------------------------------------------------------------
-// Analytical 2D Simplex Noise (Gustavson / Ashima, origin-bias-free +10 permute)
-// -----------------------------------------------------------------------------
-vec3 mod289_3(vec3 x) {
-    return x - floor(x * (1.0 / 289.0)) * 289.0;
-}
-
-vec2 mod289_2(vec2 x) {
-    return x - floor(x * (1.0 / 289.0)) * 289.0;
-}
-
-vec3 permute(vec3 x) {
-    return mod289_3(((x * 34.0) + 10.0) * x);
-}
+vec3 mod289_3(vec3 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
+vec2 mod289_2(vec2 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
+vec3 permute(vec3 x) { return mod289_3(((x * 34.0) + 10.0) * x); }
 
 float snoise(vec2 v) {
-    const vec4 C = vec4(
-        0.211324865405187,
-        0.366025403784439,
-       -0.577350269189626,
-        0.024390243902439
-    );
+    const vec4 C = vec4(0.211324865405187, 0.366025403784439, -0.577350269189626, 0.024390243902439);
     vec2 i = floor(v + dot(v, C.yy));
     vec2 x0 = v - i + dot(i, C.xx);
-
     vec2 i1 = (x0.x > x0.y) ? vec2(1.0, 0.0) : vec2(0.0, 1.0);
     vec4 x12 = x0.xyxy + C.xxzz;
     x12.xy -= i1;
-
     i = mod289_2(i);
-    vec3 p = permute(
-        permute(i.y + vec3(0.0, i1.y, 1.0)) + i.x + vec3(0.0, i1.x, 1.0)
-    );
-
-    vec3 m = max(
-        0.5 - vec3(dot(x0, x0), dot(x12.xy, x12.xy), dot(x12.zw, x12.zw)),
-        0.0
-    );
+    vec3 p = permute(permute(i.y + vec3(0.0, i1.y, 1.0)) + i.x + vec3(0.0, i1.x, 1.0));
+    vec3 m = max(0.5 - vec3(dot(x0, x0), dot(x12.xy, x12.xy), dot(x12.zw, x12.zw)), 0.0);
     m = m * m;
     m = m * m;
-
     vec3 x = 2.0 * fract(p * C.www) - 1.0;
     vec3 h = abs(x) - 0.5;
     vec3 ox = floor(x + 0.5);
     vec3 a0 = x - ox;
-
     m *= 1.79284291400159 - 0.85373472095314 * (a0 * a0 + h * h);
-
-    vec3 g;
-    g.x = a0.x * x0.x + h.x * x0.y;
-    g.yz = a0.yz * x12.xz + h.yz * x12.yw;
+    vec3 g = vec3(a0.x * x0.x + h.x * x0.y, a0.yz * x12.xz + h.yz * x12.yw);
     return 130.0 * dot(m, g);
 }
 
-// C2-continuous quintic smootherstep (zero 1st & 2nd derivative kinks -> zero Mach bands)
+// Quintic C2 step avoids second-derivative Mach bands on wide optical blurs
 float smootherstep01(float x) {
     float t = clamp(x, 0.0, 1.0);
     return t * t * t * (t * (t * 6.0 - 15.0) + 10.0);
 }
 
-// -----------------------------------------------------------------------------
-// Exact Björn Ottosson OKLab -> Linear sRGB
-// -----------------------------------------------------------------------------
+// Björn Ottosson OKLab -> linear sRGB
 vec3 oklabToLinearSRGB(vec3 lab) {
     float l_ = lab.x + 0.3963377774 * lab.y + 0.2158037573 * lab.z;
     float m_ = lab.x - 0.1055613458 * lab.y - 0.0638541728 * lab.z;
     float s_ = lab.x - 0.0894841775 * lab.y - 1.2914855480 * lab.z;
-
-    float l = l_ * l_ * l_;
-    float m = m_ * m_ * m_;
-    float s = s_ * s_ * s_;
-
+    float l = l_ * l_ * l_, m = m_ * m_ * m_, s = s_ * s_ * s_;
     return vec3(
         +4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s,
         -1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s,
@@ -159,52 +103,29 @@ vec3 oklabToLinearSRGB(vec3 lab) {
     );
 }
 
-// -----------------------------------------------------------------------------
-// Hue-Preserving C1 Soft-Shoulder Gamut Compression in Linear sRGB
-// Smoothly compresses out-of-gamut excursions (<0 or >1) toward perceptual
-// luminance Y so vivid sunset oranges, cerulean blues, and magentas never flat-clip.
-// -----------------------------------------------------------------------------
+// C1 soft-shoulder gamut compression toward perceptual luminance Y
 vec3 softGamutCompress(vec3 rgb) {
-    // 1. Gentle highlight roll-off if total luminance approaches 1.0
     float rawY = dot(rgb, vec3(0.2126, 0.7152, 0.0722));
     float Y = clamp(rawY, 1e-4, 0.9999);
     if (rawY > 0.88) {
         float excess = rawY - 0.88;
         Y = 0.88 + 0.1199 * (excess / (excess + 0.1199));
     }
-
     vec3 chroma = rgb - vec3(rawY);
-
-    // Measure relative excursion toward lower (0.0) and upper (1.0) gamut faces
-    vec3 eLow = max(vec3(0.0), -chroma) / Y;
-    vec3 eHigh = max(vec3(0.0), chroma) / (1.0 - Y);
-    vec3 eVec = max(eLow, eHigh);
+    vec3 eVec = max(max(vec3(0.0), -chroma) / Y, max(vec3(0.0), chroma) / (1.0 - Y));
     float e = max(eVec.r, max(eVec.g, eVec.b));
-
-    // C1 rational shoulder starting at 82% of gamut boundary, asymptotic to 1.0
-    const float KNEE = 0.82;
-    const float HEADROOM = 1.0 - KNEE;
-    if (e > KNEE) {
-        float x = e - KNEE;
-        float eComp = KNEE + HEADROOM * (x / (x + HEADROOM));
-        chroma *= (eComp / e);
+    if (e > 0.82) {
+        float x = e - 0.82;
+        chroma *= (0.82 + 0.18 * (x / (x + 0.18))) / e;
     }
-
     return clamp(vec3(Y) + chroma, 0.0, 1.0);
 }
 
-// Exact IEC 61966-2-1 Linear sRGB -> sRGB transfer
 vec3 linearToSRGB(vec3 c) {
     c = clamp(c, 0.0, 1.0);
-    vec3 lo = c * 12.92;
-    vec3 hi = 1.055 * pow(max(c, vec3(1e-5)), vec3(1.0 / 2.4)) - 0.055;
-    return mix(hi, lo, lessThanEqual(c, vec3(0.0031308)));
+    return mix(1.055 * pow(max(c, vec3(1e-5)), vec3(1.0 / 2.4)) - 0.055, c * 12.92, lessThanEqual(c, vec3(0.0031308)));
 }
 
-// -----------------------------------------------------------------------------
-// 32-bit PCG Integer Bit-Mixing Hash -> Zero-Mean Triangular-PDF Film Grain
-// Crisp, artifact-free across 4K/5K Retina on Apple Silicon Metal & mobile GPUs.
-// -----------------------------------------------------------------------------
 uint pcgHash(uint v) {
     uint state = v * 747796405u + 2891336453u;
     uint word = ((state >> ((state >> 28u) + 4u)) ^ state) * 277803737u;
@@ -213,11 +134,7 @@ uint pcgHash(uint v) {
 
 float triangularFilmGrain(uvec2 px, uint seed) {
     uint base = px.x * 1664525u + px.y * 1013904223u + seed * 2246822519u;
-    uint h1 = pcgHash(base);
-    uint h2 = pcgHash(base ^ 2654435769u);
-    float u1 = float(h1 >> 8u) * (1.0 / 16777216.0);
-    float u2 = float(h2 >> 8u) * (1.0 / 16777216.0);
-    return (u1 + u2) - 1.0;
+    return float(pcgHash(base) >> 8u) * (1.0 / 16777216.0) + float(pcgHash(base ^ 2654435769u) >> 8u) * (1.0 / 16777216.0) - 1.0;
 }
 
 void main() {
@@ -235,42 +152,31 @@ void main() {
     float warpAmount = u_warpParams.w;
     vec2 pointer = u_bridgePointer.zw;
 
-    // Centered isotropic coordinates for aspect-invariant noise & ribbon topology
     vec2 pMetric = (uv - 0.5) * metric;
-
-    // Gentle laminar time drift (identically zero when time == 0.0)
     vec2 timeDrift = flowDir * (time * 0.055) + flowPerp * (sin(time * 0.21) * 0.045);
 
-    // -------------------------------------------------------------------------
-    // Stage 1: Style-Specific Domain Warp & Harmonic Silk Ribbon Field
-    // -------------------------------------------------------------------------
     vec2 warpOffset = vec2(0.0);
     float silkSheen = 0.0;
     float silkTrough = 0.0;
+    float causticCusp = 0.0;
 
     if (style == 1) {
-        // SPHERE mode: whisper-subtle low-frequency atmospheric mist drift only
         vec2 qSphere = pMetric * (warpScale * 0.60) + u_warpParams.xy + timeDrift * 0.55;
         float m1 = snoise(qSphere);
         float m2 = snoise(qSphere + vec2(4.3, -2.1));
         warpOffset = vec2(m1, m2) * (warpAmount * 0.62);
     } else {
-        // MESH & SILK modes: smooth 2-octave iterative curl/flow simplex warp
         vec2 q0 = pMetric * warpScale + u_warpParams.xy + timeDrift;
         float n1 = snoise(q0);
         float n2 = snoise(q0 * 1.06 + vec2(5.2, 1.3));
 
         vec2 q1 = q0 * 1.82 + vec2(n1, n2) * 0.62 + vec2(-3.7, 4.1) - timeDrift * 0.65;
-        vec2 oct2 = vec2(
-            snoise(q1),
-            snoise(q1 + vec2(2.9, -4.6))
-        );
+        vec2 oct2 = vec2(snoise(q1), snoise(q1 + vec2(2.9, -4.6)));
 
         vec2 billow = vec2(n1, n2) * 0.72 + oct2 * 0.28 + flowDir * (n1 * 0.22);
         warpOffset = billow * warpAmount;
 
         if (style == 2) {
-            // SILK mode: harmonic ribbon folds along warped flow lines + satin crest lift
             float along = dot(pMetric, flowDir);
             float across = dot(pMetric, flowPerp);
             float ribbonPhase = across * (warpScale * 2.30)
@@ -288,19 +194,21 @@ void main() {
             silkTrough = pow(1.0 - crestRaw, 2.10) * sheenAmt;
 
             warpOffset += (flowPerp * (foldWave * 0.16) + flowDir * (cos(ribbonPhase) * 0.058)) * foldAmt;
+        } else if (style == 3) {
+            float r1 = 1.0 - abs(snoise(q0 * 1.08 + vec2(n1, n2) * 0.68));
+            float r2 = 1.0 - abs(snoise(q1 * 0.88 - vec2(n2, n1) * 0.52));
+            float ridge = clamp(r1 * 0.62 + r2 * 0.38, 0.0, 1.0);
+            causticCusp = pow(ridge, 3.0);
+            warpOffset = billow * (warpAmount * 0.82) + flowPerp * ((r1 - r2) * 0.14);
         } else if (foldStrength > 0.001) {
-            // Optional gentle watercolor wave modulation in MESH mode
             float meshWave = sin(dot(pMetric, flowPerp) * (warpScale * 1.65) + n1 * 1.35);
             warpOffset += flowPerp * (meshWave * foldStrength * 0.085);
         }
     }
 
-    // Effective bloom position with subtle parallax
-    vec2 bloomPos = u_bloomGeom.xy + pointer * 0.018;
+    float whisperAmt = u_flowFold.w;
+    vec2 bloomPos = u_bloomGeom.xy + pointer * (0.055 * max(whisperAmt, 0.25));
 
-    // -------------------------------------------------------------------------
-    // Stage 2: Perceptual OKLab Field Accumulation (Base + 6 Poles + Bloom)
-    // -------------------------------------------------------------------------
     float baseW = (style == 1) ? 0.82 : 0.58;
     vec3 sumLab = u_baseLab * baseW;
     float sumChroma = length(u_baseLab.yz) * baseW;
@@ -317,22 +225,18 @@ void main() {
         vec4 tr = u_poleTransform[i];
         float fi = float(i);
 
-        // Subtle per-pole orbital breath (0 when time == 0) + layered pointer parallax
         vec2 motionShift = vec2(0.0);
         if (abs(time) > 1e-5) {
             float rate = 0.17 + 0.031 * fi;
             float ph = fi * 2.0943951;
             motionShift = vec2(sin(time * rate + ph), cos(time * (rate * 0.83) + ph)) * (0.022 + 0.004 * fi);
         }
-        float depthParallax = 0.012 + 0.005 * fi;
+        float depthParallax = (0.006 + 0.0028 * fi) * max(whisperAmt, 0.35);
         vec2 polePos = prs.xy + motionShift + pointer * depthParallax;
         float radius = max(prs.z, 0.05);
         float softness = clamp(prs.w, 0.05, 1.6);
 
-        // Aspect-corrected vector from pole center to warped fragment
         vec2 dVec = (uv - polePos) * metric + warpOffset;
-
-        // Rotate by -angle and scale by inverse stretch (precomputed on CPU)
         vec2 local = vec2(
             ( dVec.x * tr.z + dVec.y * tr.w) * tr.x,
             (-dVec.x * tr.w + dVec.y * tr.z) * tr.y
@@ -343,7 +247,6 @@ void main() {
         float w = 0.0;
 
         if (style == 1) {
-            // SPHERE mode: wide-aperture 3D volumetric sphere + optical halo + 3D light bias
             float sphereR = max(radius * 0.52, 0.04);
             float rNorm = dist / sphereR;
             float blurW = 0.24 + 0.62 * softness;
@@ -351,14 +254,10 @@ void main() {
             float tEdge = (rNorm - (1.0 - blurW * 0.85)) / max(1.75 * blurW, 1e-3);
             float apertureDisc = 1.0 - smootherstep01(tEdge);
 
-            // Soft 3D spherical chord thickness profile
             float chord = sqrt(max(0.0, 1.0 - min(rNorm * rNorm * 0.55, 0.85)));
-            // Wide Gaussian atmospheric scattering veil
             float halo = exp(-pow(max(rNorm, 1e-4) / (1.06 + 0.52 * softness), 2.15));
-
             float density = apertureDisc * (0.62 + 0.24 * chord) + halo * 0.30;
 
-            // Internal 3D directional illumination bias toward bloomPos
             vec2 toBloom = (bloomPos - polePos) * metric;
             float toBloomLen = length(toBloom);
             vec2 lightDir = (toBloomLen > 1e-3) ? (toBloom / toBloomLen) : vec2(0.0, -1.0);
@@ -370,22 +269,20 @@ void main() {
             );
             float lightWrap = rawFacing * (1.25 - 0.25 * rawFacing * rawFacing) * 0.80;
 
-            poleLab.x = clamp(
-                poleLab.x + lightWrap * 0.078 + (chord - 0.72) * 0.035,
-                0.02,
-                0.99
-            );
+            poleLab.x = clamp(poleLab.x + lightWrap * 0.078 + (chord - 0.72) * 0.035, 0.02, 0.99);
             poleLab.yz = mix(poleLab.yz, u_bloomLab.yz, max(0.0, lightWrap) * 0.14);
 
             w = poleWeight * density * 2.45;
         } else if (style == 2) {
-            // SILK mode: elongated flowing ribbon fields modulated along fold crests
             float effRadius = max(radius * (0.44 + 0.24 * softness), 0.035);
             float p = clamp(1.98 - 0.42 * softness, 1.38, 2.20);
             float falloff = exp(-pow(max(dist / effRadius, 1e-5), p));
             w = poleWeight * falloff * (1.58 + 0.26 * silkSheen);
+        } else if (style == 3) {
+            float effRadius = max(radius * (0.42 + 0.24 * softness), 0.035);
+            float falloff = exp(-pow(max(dist / effRadius, 1e-5), 1.78));
+            w = poleWeight * falloff * (1.25 + 1.15 * causticCusp);
         } else {
-            // MESH mode: ultra-feathered super-Gaussian watercolor clouds
             float effRadius = max(radius * (0.40 + 0.22 * softness), 0.035);
             float p = clamp(2.10 - 0.50 * softness, 1.35, 2.28);
             float falloff = exp(-pow(max(dist / effRadius, 1e-5), p));
@@ -397,7 +294,6 @@ void main() {
         totalW += w;
     }
 
-    // Wide diffused atmospheric bloom glow around bloomPos
     float bloomStrength = max(u_bloomGeom.w, 0.0);
     if (bloomStrength > 0.0001) {
         vec2 bloomDelta = (uv - bloomPos) * metric + warpOffset * 0.35;
@@ -414,26 +310,40 @@ void main() {
     vec3 blendedLab = sumLab / totalW;
     float avgChroma = sumChroma / totalW;
 
-    // -------------------------------------------------------------------------
-    // Stage 3: Anti-Muddy Chroma-Loss Scatter Lift & Opposing-Chord Bridge Arc
-    // Analytically detects opposing hue transitions (e.g. cerulean <-> tangerine)
-    // and lifts L + arcs (a,b) along bridgeDir instead of collapsing through gray.
-    // -------------------------------------------------------------------------
+    // Opposing-hue chroma loss triggers scatter lift in L and bridge arc in (a, b)
     float chromaLoss = max(0.0, avgChroma - length(blendedLab.yz));
     float rawLift = max(0.0, u_lighting.x);
     float liftGain = (rawLift <= 0.22) ? (rawLift * 3.2) : (0.704 + (rawLift - 0.22) * 0.85);
     blendedLab.x += chromaLoss * liftGain;
     blendedLab.yz += u_bridgePointer.xy * (chromaLoss * u_lighting.y * 0.42);
 
-    // Satin ribbon crest sheen & trough depth in SILK mode
     if (style == 2) {
         float crestGain = mix(0.052, 0.078, isDark);
         float troughGain = mix(0.020, 0.036, isDark);
         blendedLab.x += silkSheen * crestGain - silkTrough * troughGain;
         blendedLab.yz *= (1.0 + silkSheen * 0.07);
+    } else if (style == 3) {
+        float fieldPresence = (totalW - baseW) / max(totalW, 0.0001);
+        blendedLab.x += causticCusp * mix(0.068, 0.115, isDark) * (0.45 + 0.55 * fieldPresence);
+        blendedLab.x += chromaLoss * causticCusp * 0.35;
+        blendedLab.yz = mix(blendedLab.yz, u_bloomLab.yz, causticCusp * 0.16);
     }
 
-    // Smooth optical lens vignette in perceptual lightness L (supports negative edge lift in light mood)
+    if (whisperAmt > 0.001) {
+        float mass = (totalW - baseW) / max(totalW, 0.0001) + (silkSheen + causticCusp) * 0.45;
+        // Negate dFdy to align window-space derivatives with top-down v_uv
+        vec2 gradM = vec2(dFdx(mass), -dFdy(mass)) * (u_viewport.x / metric.x);
+        vec3 surfN = normalize(vec3(-gradM * 0.88, 1.0));
+        vec2 toCursor = (pointer * 0.5 + 0.5 - uv) * metric;
+        vec3 keyDir = normalize(vec3(toCursor, 0.68));
+        float reach = exp(-dot(toCursor, toCursor) * 0.42);
+        float graze = dot(surfN.xy, keyDir.xy);
+        float zenith = (pow(max(dot(surfN, keyDir), 0.0), 5.2) - 0.30) * reach;
+        float spotPool = (reach - 0.36) * mix(0.024, 0.036, isDark);
+        blendedLab.x += clamp((graze * 0.048 + zenith * 0.042 + spotPool) * whisperAmt, -0.056, 0.062);
+        blendedLab.yz += (u_bridgePointer.xy * 0.015 + vec2(0.005, 0.015)) * ((graze * 0.75 + (reach - 0.38) * 0.55) * whisperAmt);
+    }
+
     float vignette = clamp(u_lighting.z, -0.25, 0.35);
     if (abs(vignette) > 0.0005) {
         vec2 vigUv = uv - 0.5;
@@ -443,19 +353,11 @@ void main() {
     }
 
     blendedLab.x = clamp(blendedLab.x, 0.0, 1.0);
+    vec3 srgb = linearToSRGB(softGamutCompress(oklabToLinearSRGB(blendedLab)));
 
-    // -------------------------------------------------------------------------
-    // Stage 4: OKLab -> Linear sRGB -> Soft Gamut Compression -> sRGB + Grain
-    // -------------------------------------------------------------------------
-    vec3 linRGB = oklabToLinearSRGB(blendedLab);
-    linRGB = softGamutCompress(linRGB);
-    vec3 srgb = linearToSRGB(linRGB);
-
-    // Physical-pixel monochromatic triangular-PDF film grain
     float effectiveGrain = u_lighting.w;
     if (effectiveGrain > 0.0) {
         float g = triangularFilmGrain(uvec2(gl_FragCoord.xy), u_grainSeed);
-        // Subtle emulsion response roll-off at extreme black/white endpoints
         float luma = dot(srgb, vec3(0.299, 0.587, 0.114));
         float emulsionMask = mix(0.58, 1.0, clamp(4.0 * luma * (1.0 - luma), 0.0, 1.0));
         srgb = clamp(srgb + vec3(g * effectiveGrain * emulsionMask), 0.0, 1.0);
@@ -465,16 +367,11 @@ void main() {
 }
 `;
 
-// -----------------------------------------------------------------------------
-// Deterministic 32-bit FNV-1a Hash for Seed Strings
-// -----------------------------------------------------------------------------
+// FNV-1a 32-bit seed hash
 function hashSeed32(seedStr) {
   const s = String(seedStr ?? 'sphere-default');
   let h = 2166136261 >>> 0;
-  for (let i = 0; i < s.length; i++) {
-    h ^= s.charCodeAt(i);
-    h = Math.imul(h, 16777619) >>> 0;
-  }
+  for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 16777619) >>> 0;
   return h >>> 0;
 }
 
@@ -482,22 +379,16 @@ function normalizeEffectiveGrain(rawGrain, grainScale) {
   const scale = Math.max(0, Number.isFinite(grainScale) ? grainScale : 1.0);
   if (scale === 0) return 0.0;
   const g = Math.max(0, Number.isFinite(rawGrain) ? rawGrain : 0.026);
-  // Support both direct sRGB amplitude (0.015..0.065) and normalized sliders (>0.065) smoothly
   const calibrated = g <= 0.065 ? g : 0.065 + 0.030 * Math.tanh((g - 0.065) * 2.5);
-  // Guarantee >= 1/255 LSB anti-banding dither whenever grainScale > 0
   return Math.max(1.0 / 255.0, calibrated * scale);
 }
 
 function computeIsotropicMetric(width, height) {
   const minDim = Math.max(1, Math.min(width, height));
-  const geomDim = Math.sqrt(Math.max(1, width * height));
-  const refDim = minDim + (geomDim - minDim) * 0.22;
+  const refDim = minDim + (Math.sqrt(Math.max(1, width * height)) - minDim) * 0.22;
   return [width / refDim, height / refDim];
 }
 
-// -----------------------------------------------------------------------------
-// Software Perceptual OKLab Helpers (for Graceful Canvas2D Fallback Only)
-// -----------------------------------------------------------------------------
 function oklabToSRGBByte(L, a, b, out, offset) {
   const l_ = L + 0.3963377774 * a + 0.2158037573 * b;
   const m_ = L - 0.1055613458 * a - 0.0638541728 * b;
@@ -544,11 +435,67 @@ function oklabToSRGBByte(L, a, b, out, offset) {
   out[offset + 3] = 255;
 }
 
+const _hexBytes = new Uint8Array(4);
+function resolveHex(hex, lab, fallback = '#808080') {
+  if (typeof hex === 'string' && hex) return hex;
+  if (!Array.isArray(lab) || lab.length < 3) return fallback;
+  oklabToSRGBByte(Math.min(1, Math.max(0, lab[0])), lab[1], lab[2], _hexBytes, 0);
+  return `#${((1 << 24) | (_hexBytes[0] << 16) | (_hexBytes[1] << 8) | _hexBytes[2]).toString(16).slice(1)}`;
+}
+
+const lerp = (a, b, t) => a + (b - a) * t;
+const lerpArr = (o, a, b, t) => {
+  for (let i = 0; i < o.length; i++) o[i] = a[i] + ((b?.[i] ?? a[i]) - a[i]) * t;
+};
+const lerpKeys = (o, a, b, keys, t) => {
+  for (const k of keys) o[k] = (a?.[k] ?? o[k]) + ((b?.[k] ?? a?.[k] ?? o[k]) - (a?.[k] ?? o[k])) * t;
+};
+const lerpAngle = (a, b, t) => {
+  const d = ((b ?? 0) - (a ?? 0)) % (Math.PI * 2);
+  return (a ?? 0) + (d > Math.PI ? d - Math.PI * 2 : d < -Math.PI ? d + Math.PI * 2 : d) * t;
+};
+const cloneScene = (s) =>
+  typeof structuredClone === 'function' ? structuredClone(s) : JSON.parse(JSON.stringify(s));
+const LIGHT_KEYS = ['scatterLift', 'chromaPreserve', 'vignette', 'grain'];
+
+function morphSceneInto(out, a, b, u) {
+  out._darkFactor = lerp(a._darkFactor ?? (a.isDark ? 1 : 0), b._darkFactor ?? (b.isDark ? 1 : 0), u);
+  out.isDark = out._darkFactor >= 0.5;
+  out.seed = u < 0.5 ? a.seed : b.seed;
+  out.style = u < 0.5 ? a.style : (b.style ?? 'mesh');
+  out.mood = u < 0.5 ? a.mood : (b.mood ?? (b.isDark ? 'dark' : 'light'));
+  lerpArr(out.baseLab, a.baseLab, b.baseLab, u);
+  lerpArr(out.bloomLab, a.bloomLab || a.baseLab, b.bloomLab || b.baseLab, u);
+  lerpArr(out.bloomPos, a.bloomPos || [0.5, 0.4], b.bloomPos || [0.5, 0.4], u);
+  lerpKeys(out, a, b, ['bloomRadius', 'bloomStrength'], u);
+  const aBr = a.bridgeDir || [0, 1], bBr = b.bridgeDir || [0, 1];
+  const brAng = lerpAngle(Math.atan2(aBr[1], aBr[0]), Math.atan2(bBr[1], bBr[0]), u);
+  out.bridgeDir[0] = Math.cos(brAng);
+  out.bridgeDir[1] = Math.sin(brAng);
+  for (let i = 0; i < out.poles.length; i++) {
+    const op = out.poles[i], ap = a.poles[i], bp = b.poles?.[i];
+    if (!ap) continue;
+    lerpArr(op.lab, ap.lab, bp?.lab || b.baseLab, u);
+    lerpArr(op.pos, ap.pos, bp?.pos || ap.pos, u);
+    lerpArr(op.stretch, ap.stretch || [1, 1], bp?.stretch || ap.stretch || [1, 1], u);
+    lerpKeys(op, ap, bp, ['radius', 'softness'], u);
+    op.angle = lerpAngle(ap.angle, bp?.angle ?? ap.angle, u);
+    op.weight = lerp(ap.weight ?? 1, bp ? (bp.weight ?? 1) : 0, u);
+  }
+  const aw = a.warp || {}, bw = b.warp || {};
+  const aPx = aw.phase?.[0] ?? 0, aPy = aw.phase?.[1] ?? 0, bPx = bw.phase?.[0] ?? 0, bPy = bw.phase?.[1] ?? 0;
+  const far = Math.hypot(bPx - aPx, bPy - aPy) > 3.5;
+  const env = far || styleToIndex(a.style) !== styleToIndex(b.style) ? 1 - 0.9 * Math.sin(u * Math.PI) : 1;
+  out.warp.scale = lerp(aw.scale ?? 1.35, bw.scale ?? 1.35, u);
+  out.warp.amount = lerp(aw.amount ?? 0.24, bw.amount ?? 0.24, u) * env;
+  out.warp.foldStrength = lerp(aw.foldStrength ?? 0, bw.foldStrength ?? 0, u) * env;
+  out.warp.phase[0] = far ? (u < 0.5 ? aPx : bPx) : lerp(aPx, bPx, u);
+  out.warp.phase[1] = far ? (u < 0.5 ? aPy : bPy) : lerp(aPy, bPy, u);
+  out.warp.flowAngle = lerpAngle(aw.flowAngle, bw.flowAngle, u);
+  lerpKeys(out.lighting, a.lighting, b.lighting, LIGHT_KEYS, u);
+}
+
 export class SphereRenderer {
-  /**
-   * @param {HTMLCanvasElement | OffscreenCanvas} canvas
-   * @param {{ onTiming?: Function, maxDpr?: number, preserveDrawingBuffer?: boolean }} [options]
-   */
   constructor(canvas, { onTiming = null, maxDpr = 2, preserveDrawingBuffer = false } = {}) {
     if (!canvas) {
       throw new Error('SphereRenderer requires a valid canvas element.');
@@ -566,22 +513,25 @@ export class SphereRenderer {
     this.lastCpuMs = 0;
     this.lastGpuMs = null;
 
-    // Pointer state (normalized -1..1)
     this.pointer = new Float32Array(2);
     this.targetPointer = new Float32Array(2);
+    this._whisper = 0;
+    this._targetWhisper = 0;
+    this._activeGrainScale = 1.0;
+    this._whispering = false;
+    this._morphActive = null;
+    this._morphFrom = null;
+    this._morphScratch = null;
 
-    // Preallocated uniform staging typed arrays (zero per-frame heap allocations)
     this._poleLabWeight = new Float32Array(24);
     this._polePosRadSoft = new Float32Array(24);
     this._poleTransform = new Float32Array(24);
 
-    // Cached seed hash
     this._cachedSeedStr = null;
     this._cachedSeedUint = 0;
 
-    // Motion & async GPU query state
     this.isAnimating = false;
-    this._motionRafId = 0;
+    this._rafId = 0;
     this._queryPollRafId = 0;
     this._motionScene = null;
     this._motionOptions = null;
@@ -590,12 +540,10 @@ export class SphereRenderer {
     this._lastScene = null;
     this._destroyed = false;
 
-    // GPU timer query pool & FIFO queue
     this._timerExt = null;
     this._pendingQueries = [];
     this._queryPool = [];
 
-    // Context loss resilience
     this._onContextLost = (e) => {
       e.preventDefault();
       this._pendingQueries.length = 0;
@@ -604,9 +552,7 @@ export class SphereRenderer {
     this._onContextRestored = () => {
       if (!this._destroyed && this.backend === 'webgl2') {
         this._initWebGLResources();
-        if (this._lastScene) {
-          this.render(this._lastScene);
-        }
+        if (this._lastScene) this.render(this._lastScene);
       }
     };
 
@@ -637,13 +583,10 @@ export class SphereRenderer {
     if (gl) {
       this.gl = gl;
       this.backend = 'webgl2';
-      const ok = this._initWebGLResources();
-      if (ok) return;
-      // Clean up partial GL attempt before falling back
+      if (this._initWebGLResources()) return;
       this.gl = null;
     }
 
-    // Graceful Canvas2D fallback if WebGL2 is unavailable or blocked
     this.backend = 'canvas2d';
     this.ctx2d = this.canvas.getContext('2d', { alpha: false });
     this._fallbackW = 0;
@@ -694,6 +637,7 @@ export class SphereRenderer {
     }
 
     this._program = program;
+    // WebGL2 core profile requires a bound VAO even for bufferless gl_VertexID draws
     this._vao = gl.createVertexArray();
 
     gl.disable(gl.DEPTH_TEST);
@@ -701,7 +645,6 @@ export class SphereRenderer {
     gl.disable(gl.CULL_FACE);
     gl.disable(gl.DITHER);
 
-    // Cache all uniform locations once
     this._locs = {
       viewport: gl.getUniformLocation(program, 'u_viewport'),
       modeTime: gl.getUniformLocation(program, 'u_modeTime'),
@@ -722,10 +665,6 @@ export class SphereRenderer {
     return true;
   }
 
-  /**
-   * Matches framebuffer dimensions to `canvas.clientWidth * dpr` x `canvas.clientHeight * dpr`.
-   * @returns {{ width: number, height: number, dpr: number }}
-   */
   resize() {
     const rawDpr = typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1;
     const dpr = Math.min(rawDpr, this.maxDpr);
@@ -748,20 +687,120 @@ export class SphereRenderer {
     return { width, height, dpr };
   }
 
-  /**
-   * Updates normalized pointer coordinates (-1..1 centered at viewport middle).
-   * @param {number} nx
-   * @param {number} ny
-   */
+  get isWhispering() {
+    return this._whispering;
+  }
+
+  get isMorphing() {
+    return this._morphActive !== null;
+  }
+
   setPointer(nx, ny) {
     const cx = Math.max(-1.5, Math.min(1.5, Number.isFinite(nx) ? nx : 0));
     const cy = Math.max(-1.5, Math.min(1.5, Number.isFinite(ny) ? ny : 0));
     this.targetPointer[0] = cx;
     this.targetPointer[1] = cy;
-    if (!this.isAnimating) {
+    if (this.isAnimating && this._targetWhisper === 0) this._targetWhisper = 1.0;
+    if (!this._rafId) {
       this.pointer[0] = cx;
       this.pointer[1] = cy;
     }
+  }
+
+  _ensureLoop() {
+    if (this._destroyed || this._rafId || typeof requestAnimationFrame !== 'function') return;
+    if (this._queryPollRafId && typeof cancelAnimationFrame === 'function') {
+      cancelAnimationFrame(this._queryPollRafId);
+      this._queryPollRafId = 0;
+    }
+    this._lastFrameNow = performance.now();
+    const tick = (now) => {
+      this._rafId = 0;
+      if (this._destroyed) return;
+      const dt = Math.min(0.08, Math.max(0.001, (now - this._lastFrameNow) / 1000));
+      this._lastFrameNow = now;
+      if (this.isAnimating) this._motionTime += dt * (this._motionOptions?.speed ?? 1.0);
+
+      const a = 1 - Math.exp(-dt * 6.2);
+      const dx = this.targetPointer[0] - this.pointer[0];
+      const dy = this.targetPointer[1] - this.pointer[1];
+      const dw = this._targetWhisper - this._whisper;
+      if (this._whispering && !this.isAnimating && Math.hypot(dx, dy) + Math.abs(dw) < 0.0016) {
+        this.pointer[0] = this.targetPointer[0];
+        this.pointer[1] = this.targetPointer[1];
+        this._whisper = this._targetWhisper;
+        this._whispering = false;
+      } else {
+        this.pointer[0] += dx * a;
+        this.pointer[1] += dy * a;
+        this._whisper += dw * a;
+      }
+
+      let sceneToDraw = this.isAnimating ? this._motionScene : this._lastScene;
+      let gs = this.isAnimating ? (this._motionOptions?.grainScale ?? this._activeGrainScale) : this._activeGrainScale;
+      let cbDone = null;
+      const m = this._morphActive;
+      if (m) {
+        gs = m.gs;
+        const rawT = Math.min(1, Math.max(0, (now - m.t0) / m.dur));
+        if (rawT >= 1) {
+          this._morphActive = null;
+          sceneToDraw = m.next;
+          if (this.isAnimating) this._motionScene = m.next;
+          cbDone = m;
+        } else {
+          const u = 1 - (1 - rawT) ** 3;
+          morphSceneInto(this._morphScratch, this._morphFrom, m.next, u);
+          sceneToDraw = this._morphScratch;
+          if (this.isAnimating) this._motionScene = this._morphScratch;
+          cbDone = { u, m };
+        }
+      }
+
+      if (sceneToDraw) {
+        this.render(sceneToDraw, { time: this._motionTime, pointer: this.pointer, whisper: this._whisper, grainScale: gs });
+      }
+      if (cbDone) {
+        if (cbDone.m) cbDone.m.onUpdate?.(cbDone.u, this._morphScratch);
+        else {
+          cbDone.onUpdate?.(1, cbDone.next);
+          cbDone.onComplete?.(cbDone.next);
+        }
+      }
+      if (this.isAnimating || this._whispering || this._morphActive) {
+        this._rafId = requestAnimationFrame(tick);
+      }
+    };
+    this._rafId = requestAnimationFrame(tick);
+  }
+
+  wakePointer(nx, ny, { strength = 1.0, grainScale } = {}) {
+    if (this._destroyed) return;
+    this.targetPointer[0] = Math.max(-1.5, Math.min(1.5, Number.isFinite(nx) ? nx : 0));
+    this.targetPointer[1] = Math.max(-1.5, Math.min(1.5, Number.isFinite(ny) ? ny : 0));
+    this._targetWhisper = Math.max(0, Math.min(1.5, Number.isFinite(strength) ? strength : 1.0));
+    if (grainScale !== undefined) this._activeGrainScale = grainScale;
+    if (!this._lastScene) return;
+    this._whispering = true;
+    this._ensureLoop();
+  }
+
+  morphTo(nextScene, { duration = 560, grainScale, onUpdate, onComplete } = {}) {
+    if (this._destroyed || !nextScene) return;
+    if (grainScale !== undefined) this._activeGrainScale = grainScale;
+    const gs = grainScale ?? this._activeGrainScale;
+    if (!this._lastScene || duration <= 0 || typeof requestAnimationFrame !== 'function') {
+      this._morphActive = null;
+      if (this.isAnimating) this._motionScene = nextScene;
+      this.render(nextScene, { time: this._motionTime, pointer: this.pointer, whisper: this._whisper, grainScale: gs });
+      onUpdate?.(1, nextScene);
+      onComplete?.(nextScene);
+      return;
+    }
+    this._morphFrom = cloneScene(this._lastScene);
+    if (!this._morphScratch) this._morphScratch = cloneScene(this._lastScene);
+    this._morphActive = { t0: performance.now(), dur: Math.max(16, duration), gs, next: nextScene, onUpdate, onComplete };
+    this._ensureLoop();
   }
 
   _drainGpuTimerQueries() {
@@ -775,14 +814,11 @@ export class SphereRenderer {
       const available = gl.getQueryParameter(q, gl.QUERY_RESULT_AVAILABLE);
       const disjoint = gl.getParameter(ext.GPU_DISJOINT_EXT);
 
-      if (!available && !disjoint) {
-        break;
-      }
+      if (!available && !disjoint) break;
 
       this._pendingQueries.shift();
       if (available && !disjoint) {
-        const elapsedNs = gl.getQueryParameter(q, gl.QUERY_RESULT);
-        this.lastGpuMs = elapsedNs / 1e6;
+        this.lastGpuMs = gl.getQueryParameter(q, gl.QUERY_RESULT) / 1e6;
         updated = true;
       }
       if (this._queryPool.length < 8) {
@@ -797,7 +833,7 @@ export class SphereRenderer {
   _scheduleStaticQueryPoll(attempt = 0) {
     if (
       this._destroyed ||
-      this.isAnimating ||
+      this._rafId ||
       this._queryPollRafId ||
       this._pendingQueries.length === 0 ||
       typeof requestAnimationFrame !== 'function' ||
@@ -819,18 +855,12 @@ export class SphereRenderer {
           backend: this.backend,
         });
       }
-      if (this._pendingQueries.length > 0 && !this.isAnimating) {
+      if (this._pendingQueries.length > 0 && !this._rafId) {
         this._scheduleStaticQueryPoll(attempt + 1);
       }
     });
   }
 
-  /**
-   * Renders a single frame of `scene` with zero heap allocations on the WebGL2 path.
-   * @param {object} scene — Exact SceneConfig from `palettes.js`
-   * @param {{ time?: number, pointer?: number[] | Float32Array, grainScale?: number }} [options]
-   * @returns {{ cpuMs: number, lastGpuMs: number | null, width: number, height: number }}
-   */
   render(scene, options = {}) {
     if (this._destroyed || !scene) {
       return {
@@ -852,6 +882,7 @@ export class SphereRenderer {
     const time = options.time !== undefined ? options.time : 0;
     const ptr = options.pointer || this.pointer;
     const grainScale = options.grainScale !== undefined ? options.grainScale : 1.0;
+    const whisperAmt = options.whisper !== undefined ? options.whisper : this._whisper;
 
     if (this.backend === 'canvas2d') {
       return this._renderCanvas2D(scene, width, height, time, ptr, grainScale);
@@ -870,17 +901,17 @@ export class SphereRenderer {
     gl.useProgram(this._program);
     gl.bindVertexArray(this._vao);
 
-    // Isotropic metric scale
     const minDim = Math.max(1, Math.min(width, height));
-    const geomDim = Math.sqrt(width * height);
-    const refDim = minDim + (geomDim - minDim) * 0.22;
+    const refDim = minDim + (Math.sqrt(width * height) - minDim) * 0.22;
 
     const locs = this._locs;
     gl.uniform4f(locs.viewport, width, height, width / refDim, height / refDim);
 
-    const styleCode = STYLE_MAP[scene.style] ?? 0;
+    const styleCode = styleToIndex(scene.style);
+    const darkFactor =
+      typeof scene._darkFactor === 'number' ? scene._darkFactor : scene.isDark ? 1.0 : 0.0;
     const moodCode = MOOD_MAP[scene.mood] ?? (scene.isDark ? 2 : 0);
-    gl.uniform4f(locs.modeTime, styleCode, scene.isDark ? 1.0 : 0.0, time, moodCode);
+    gl.uniform4f(locs.modeTime, styleCode, darkFactor, time, moodCode);
 
     const baseLab = scene.baseLab || [0.95, 0, 0];
     gl.uniform3f(locs.baseLab, baseLab[0], baseLab[1], baseLab[2]);
@@ -889,45 +920,21 @@ export class SphereRenderer {
     gl.uniform3f(locs.bloomLab, bloomLab[0], bloomLab[1], bloomLab[2]);
 
     const bloomPos = scene.bloomPos || [0.5, 0.4];
-    gl.uniform4f(
-      locs.bloomGeom,
-      bloomPos[0],
-      bloomPos[1],
-      scene.bloomRadius ?? 0.65,
-      scene.bloomStrength ?? 0.5,
-    );
+    gl.uniform4f(locs.bloomGeom, bloomPos[0], bloomPos[1], scene.bloomRadius ?? 0.65, scene.bloomStrength ?? 0.5);
 
     const bridgeDir = scene.bridgeDir || [0, 1];
     gl.uniform4f(locs.bridgePointer, bridgeDir[0], bridgeDir[1], ptr[0] || 0, ptr[1] || 0);
 
     const warp = scene.warp || {};
     const phase = warp.phase || [0, 0];
-    gl.uniform4f(
-      locs.warpParams,
-      phase[0],
-      phase[1],
-      warp.scale ?? 1.35,
-      warp.amount ?? 0.24,
-    );
+    gl.uniform4f(locs.warpParams, phase[0], phase[1], warp.scale ?? 1.35, warp.amount ?? 0.24);
 
     const flowAngle = warp.flowAngle ?? 0;
-    gl.uniform4f(
-      locs.flowFold,
-      Math.cos(flowAngle),
-      Math.sin(flowAngle),
-      warp.foldStrength ?? 0,
-      0,
-    );
+    gl.uniform4f(locs.flowFold, Math.cos(flowAngle), Math.sin(flowAngle), warp.foldStrength ?? 0, whisperAmt);
 
     const lighting = scene.lighting || {};
     const effectiveGrain = normalizeEffectiveGrain(lighting.grain, grainScale);
-    gl.uniform4f(
-      locs.lighting,
-      lighting.scatterLift ?? 0.42,
-      lighting.chromaPreserve ?? 0.78,
-      lighting.vignette ?? 0.25,
-      effectiveGrain,
-    );
+    gl.uniform4f(locs.lighting, lighting.scatterLift ?? 0.42, lighting.chromaPreserve ?? 0.78, lighting.vignette ?? 0.25, effectiveGrain);
 
     if (scene.seed !== this._cachedSeedStr) {
       this._cachedSeedStr = scene.seed;
@@ -935,7 +942,6 @@ export class SphereRenderer {
     }
     gl.uniform1ui(locs.grainSeed, this._cachedSeedUint);
 
-    // Pack 6 poles into preallocated Float32Arrays (precomputing trig & reciprocal stretch on CPU)
     const poles = scene.poles || [];
     const labWeightArr = this._poleLabWeight;
     const posRadSoftArr = this._polePosRadSoft;
@@ -967,20 +973,7 @@ export class SphereRenderer {
         transformArr[baseIdx + 2] = Math.cos(ang);
         transformArr[baseIdx + 3] = Math.sin(ang);
       } else {
-        labWeightArr[baseIdx] = 0;
-        labWeightArr[baseIdx + 1] = 0;
-        labWeightArr[baseIdx + 2] = 0;
         labWeightArr[baseIdx + 3] = 0;
-
-        posRadSoftArr[baseIdx] = 0.5;
-        posRadSoftArr[baseIdx + 1] = 0.5;
-        posRadSoftArr[baseIdx + 2] = 0.4;
-        posRadSoftArr[baseIdx + 3] = 0.5;
-
-        transformArr[baseIdx] = 1;
-        transformArr[baseIdx + 1] = 1;
-        transformArr[baseIdx + 2] = 1;
-        transformArr[baseIdx + 3] = 0;
       }
     }
 
@@ -988,14 +981,11 @@ export class SphereRenderer {
     gl.uniform4fv(locs.polePosRadSoft, posRadSoftArr);
     gl.uniform4fv(locs.poleTransform, transformArr);
 
-    // Submit single fullscreen triangle inside optional non-blocking GPU timer query
     const ext = this._timerExt;
     let activeQuery = null;
     if (ext && this._pendingQueries.length < 4) {
       activeQuery = this._queryPool.pop() || gl.createQuery();
-      if (activeQuery) {
-        gl.beginQuery(ext.TIME_ELAPSED_EXT, activeQuery);
-      }
+      if (activeQuery) gl.beginQuery(ext.TIME_ELAPSED_EXT, activeQuery);
     }
 
     gl.drawArrays(gl.TRIANGLES, 0, 3);
@@ -1011,124 +1001,78 @@ export class SphereRenderer {
     this.lastCpuMs = cpuMs;
 
     if (this.onTiming) {
-      this.onTiming({
-        cpuMs,
-        gpuMs: this.lastGpuMs,
-        width,
-        height,
-        backend: 'webgl2',
-      });
+      this.onTiming({ cpuMs, gpuMs: this.lastGpuMs, width, height, backend: 'webgl2' });
     }
 
-    if (activeQuery && !this.isAnimating) {
+    if (activeQuery && !this._rafId) {
       this._scheduleStaticQueryPoll(0);
     }
 
-    return {
-      cpuMs,
-      lastGpuMs: this.lastGpuMs,
-      width,
-      height,
-    };
+    return { cpuMs, lastGpuMs: this.lastGpuMs, width, height };
   }
 
-  /** Alias for `render` supporting 0%-idle static workflows. */
   renderOnce(scene, options) {
     return this.render(scene, options);
   }
 
-  /**
-   * Starts smooth 60/120fps ambient drift + damped pointer parallax without mutating `scene`.
-   * @param {object} [scene]
-   * @param {{ speed?: number, grainScale?: number }} [options]
-   */
   startMotion(scene, options = {}) {
     if (this._destroyed) return;
-    if (scene) {
-      this._motionScene = scene;
-    } else if (!this._motionScene) {
-      this._motionScene = this._lastScene;
-    }
+    if (scene) this._motionScene = scene;
+    else if (!this._motionScene) this._motionScene = this._lastScene;
     this._motionOptions = options;
-
-    if (this._queryPollRafId && typeof cancelAnimationFrame === 'function') {
-      cancelAnimationFrame(this._queryPollRafId);
-      this._queryPollRafId = 0;
-    }
-
-    if (this.isAnimating) return;
+    if (options.grainScale !== undefined) this._activeGrainScale = options.grainScale;
     this.isAnimating = true;
-    this._lastFrameNow = performance.now();
-
-    const tick = (now) => {
-      if (!this.isAnimating || this._destroyed) return;
-      const dt = Math.min(0.1, Math.max(0, (now - this._lastFrameNow) / 1000));
-      this._lastFrameNow = now;
-
-      const speed = this._motionOptions?.speed ?? 1.0;
-      this._motionTime += dt * speed;
-
-      // Silky exponential pointer damping
-      const damp = 1.0 - Math.exp(-dt * 6.5);
-      this.pointer[0] += (this.targetPointer[0] - this.pointer[0]) * damp;
-      this.pointer[1] += (this.targetPointer[1] - this.pointer[1]) * damp;
-
-      if (this._motionScene) {
-        this.render(this._motionScene, {
-          grainScale: this._motionOptions?.grainScale ?? 1.0,
-          time: this._motionTime,
-          pointer: this.pointer,
-        });
-      }
-
-      this._motionRafId = requestAnimationFrame(tick);
-    };
-
-    this._motionRafId = requestAnimationFrame(tick);
+    this._ensureLoop();
   }
 
-  /** Alias for `startMotion`. */
   startLoop(scene, options) {
     return this.startMotion(scene, options);
   }
 
-  /** Stops ambient motion immediately, returning to 0% idle CPU/GPU. */
   stopMotion() {
     this.isAnimating = false;
-    if (this._motionRafId && typeof cancelAnimationFrame === 'function') {
-      cancelAnimationFrame(this._motionRafId);
-      this._motionRafId = 0;
+    this._whispering = false;
+    this._morphActive = null;
+    if (this._rafId && typeof cancelAnimationFrame === 'function') {
+      cancelAnimationFrame(this._rafId);
+      this._rafId = 0;
     }
   }
 
-  /** Alias for `stopMotion`. */
   stopLoop() {
     return this.stopMotion();
   }
 
-  /**
-   * Renders `scene` at exact `width x height` offscreen and resolves to a PNG `Blob`.
-   * Never resizes or flickers the onscreen display canvas.
-   * @param {object} scene
-   * @param {{ width?: number, height?: number, grainScale?: number, time?: number, pointer?: number[] }} [options]
-   * @returns {Promise<Blob>}
-   */
-  async exportPNG(
+  async exportImage(
     scene,
-    { width = 3840, height = 2160, grainScale = 1.0, time = 0, pointer = [0, 0] } = {},
+    {
+      width = 3840,
+      height = 2160,
+      format = 'png',
+      quality = 0.94,
+      grainScale = 1.0,
+      time = 0,
+      pointer = [0, 0],
+      whisper = 0.0,
+    } = {},
   ) {
     const targetScene = scene || this._lastScene;
-    if (!targetScene) {
-      throw new Error('SphereRenderer.exportPNG requires a valid scene.');
-    }
+    if (!targetScene) throw new Error('SphereRenderer.exportImage requires a valid scene.');
 
+    const fmt = String(format || 'png').trim().toLowerCase();
     const w = Math.max(1, Math.round(width));
     const h = Math.max(1, Math.round(height));
 
+    if (fmt === 'svg') {
+      const svgText = this.exportSVG(targetScene, { width: w, height: h, grainScale });
+      return new Blob([svgText], { type: 'image/svg+xml;charset=utf-8' });
+    }
+
+    const mime =
+      fmt === 'webp' ? 'image/webp' : fmt === 'jpg' || fmt === 'jpeg' ? 'image/jpeg' : 'image/png';
+
     let offscreen;
-    const useOffscreenCanvas =
-      typeof OffscreenCanvas !== 'undefined' && typeof document === 'undefined';
-    if (useOffscreenCanvas) {
+    if (typeof OffscreenCanvas !== 'undefined' && typeof document === 'undefined') {
       offscreen = new OffscreenCanvas(w, h);
     } else if (typeof document !== 'undefined') {
       offscreen = document.createElement('canvas');
@@ -1138,41 +1082,97 @@ export class SphereRenderer {
       throw new Error('Cannot allocate export canvas in this environment.');
     }
 
-    const exporter = new SphereRenderer(offscreen, {
-      maxDpr: 1,
-      preserveDrawingBuffer: true,
-    });
-
+    const exporter = new SphereRenderer(offscreen, { maxDpr: 1, preserveDrawingBuffer: true });
     try {
-      exporter.render(targetScene, { time, pointer, grainScale });
-      if (exporter.gl) {
-        exporter.gl.finish();
-      }
-
+      exporter.render(targetScene, { time, pointer, grainScale, whisper });
+      if (exporter.gl) exporter.gl.finish();
       if (typeof offscreen.convertToBlob === 'function') {
-        return await offscreen.convertToBlob({ type: 'image/png' });
+        return await offscreen.convertToBlob({ type: mime, quality });
       }
-
       return await new Promise((resolve, reject) => {
-        offscreen.toBlob((blob) => {
-          if (blob) resolve(blob);
-          else reject(new Error('Failed to encode PNG blob.'));
-        }, 'image/png');
+        offscreen.toBlob(
+          (b) => (b ? resolve(b) : reject(new Error(`${fmt.toUpperCase()} encode failed.`))),
+          mime,
+          quality,
+        );
       });
     } finally {
-      if (exporter.gl) {
-        const loseExt = exporter.gl.getExtension('WEBGL_lose_context');
-        exporter.destroy();
-        if (loseExt) loseExt.loseContext();
-      } else {
-        exporter.destroy();
-      }
+      const loseExt = exporter.gl?.getExtension('WEBGL_lose_context');
+      exporter.destroy();
+      if (loseExt) loseExt.loseContext();
     }
   }
 
-  // ---------------------------------------------------------------------------
-  // Graceful Perceptual OKLab Canvas2D Fallback (Software Low-Res + Smooth Upscale)
-  // ---------------------------------------------------------------------------
+  async exportPNG(scene, options = {}) {
+    return this.exportImage(scene, { ...options, format: 'png' });
+  }
+
+  exportSVG(scene, { width = 3840, height = 2160, grainScale = 1.0 } = {}) {
+    const s = scene || this._lastScene;
+    if (!s) throw new Error('SphereRenderer.exportSVG requires a valid scene.');
+    const w = Math.max(1, Math.round(width));
+    const h = Math.max(1, Math.round(height));
+    const baseHex = resolveHex(s.baseHex, s.baseLab, '#f7f5f0');
+    const bloomHex = resolveHex(s.bloomHex, s.bloomLab || s.baseLab, baseHex);
+    const activePoles = (s.poles || []).filter((p) => (p.weight ?? 1) > 0.02);
+    const defs = [];
+    const shapes = [];
+
+    activePoles.forEach((p, idx) => {
+      const id = `sp-g-${idx}`;
+      const hex = resolveHex(p.hex, p.lab, baseHex);
+      const cx = ((p.pos?.[0] ?? 0.5) * w).toFixed(1);
+      const cy = ((p.pos?.[1] ?? 0.5) * h).toFixed(1);
+      const rx = (Math.max(0.12, p.radius ?? 0.6) * (p.stretch?.[0] ?? 1) * Math.max(w, h) * 0.62).toFixed(1);
+      const ry = (Math.max(0.12, p.radius ?? 0.6) * (p.stretch?.[1] ?? 1) * Math.max(w, h) * 0.62).toFixed(1);
+      const deg = (((p.angle ?? 0) * 180) / Math.PI).toFixed(1);
+      const op = Math.min(0.95, Math.max(0.22, (p.weight ?? 1) * 0.72)).toFixed(2);
+      defs.push(
+        `<radialGradient id="${id}" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="${hex}" stop-opacity="${op}"/><stop offset="58%" stop-color="${hex}" stop-opacity="${(Number(op) * 0.42).toFixed(2)}"/><stop offset="100%" stop-color="${hex}" stop-opacity="0"/></radialGradient>`,
+      );
+      shapes.push(
+        `<ellipse cx="${cx}" cy="${cy}" rx="${rx}" ry="${ry}" transform="rotate(${deg} ${cx} ${cy})" fill="url(#${id})"/>`,
+      );
+    });
+
+    const bx = ((s.bloomPos?.[0] ?? 0.5) * w).toFixed(1);
+    const by = ((s.bloomPos?.[1] ?? 0.4) * h).toFixed(1);
+    const br = (Math.max(0.2, s.bloomRadius ?? 0.65) * Math.max(w, h) * 0.68).toFixed(1);
+    const bop = Math.min(0.85, Math.max(0.15, s.bloomStrength ?? 0.45)).toFixed(2);
+    defs.push(
+      `<radialGradient id="sp-bloom" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="${bloomHex}" stop-opacity="${bop}"/><stop offset="100%" stop-color="${bloomHex}" stop-opacity="0"/></radialGradient>`,
+    );
+    shapes.push(`<circle cx="${bx}" cy="${by}" r="${br}" fill="url(#sp-bloom)"/>`);
+
+    const grainOp = Math.min(0.14, Math.max(0, 0.032 * (grainScale ?? 1))).toFixed(3);
+    const grainLayer =
+      Number(grainOp) > 0.002
+        ? `<filter id="sp-grain"><feTurbulence type="fractalNoise" baseFrequency="0.75" numOctaves="2" stitchTiles="stitch"/><feColorMatrix type="saturate" values="0"/></filter><rect width="${w}" height="${h}" filter="url(#sp-grain)" opacity="${grainOp}" style="mix-blend-mode:overlay"/>`
+        : '';
+
+    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${w} ${h}" width="${w}" height="${h}"><defs>${defs.join('')}</defs><rect width="${w}" height="${h}" fill="${baseHex}"/>${shapes.join('')}${grainLayer}</svg>`;
+  }
+
+  exportCSS(scene) {
+    const s = scene || this._lastScene;
+    if (!s) return '';
+    const baseHex = resolveHex(s.baseHex, s.baseLab, '#f7f5f0');
+    const bloomHex = resolveHex(s.bloomHex, s.bloomLab || s.baseLab, baseHex);
+    const stops = (s.poles || [])
+      .filter((p) => (p.weight ?? 1) > 0.05)
+      .map((p) => {
+        const hex = resolveHex(p.hex, p.lab, baseHex);
+        const x = Math.round((p.pos?.[0] ?? 0.5) * 100);
+        const y = Math.round((p.pos?.[1] ?? 0.5) * 100);
+        const r = Math.round(Math.max(32, Math.min(88, (p.radius ?? 0.65) * 72)));
+        return `radial-gradient(circle at ${x}% ${y}%, ${hex} 0%, transparent ${r}%)`;
+      });
+    const bx = Math.round((s.bloomPos?.[0] ?? 0.5) * 100);
+    const by = Math.round((s.bloomPos?.[1] ?? 0.4) * 100);
+    stops.unshift(`radial-gradient(circle at ${bx}% ${by}%, ${bloomHex} 0%, transparent 68%)`);
+    return `background-color: ${baseHex};\nbackground-image:\n  ${stops.join(',\n  ')};`;
+  }
+
   _renderCanvas2D(scene, width, height, time, ptr, grainScale) {
     const ctx = this.ctx2d;
     if (!ctx) return { cpuMs: 0, lastGpuMs: null, width, height };
@@ -1197,7 +1197,7 @@ export class SphereRenderer {
 
     const data = this._fallbackImageData.data;
     const [metricX, metricY] = computeIsotropicMetric(width, height);
-    const styleCode = STYLE_MAP[scene.style] ?? 0;
+    const styleCode = styleToIndex(scene.style);
     const isDark = Boolean(scene.isDark);
     const baseLab = scene.baseLab || [0.95, 0, 0];
     const bloomLab = scene.bloomLab || baseLab;
@@ -1227,8 +1227,8 @@ export class SphereRenderer {
         a: lab[1],
         b: lab[2],
         chroma: Math.hypot(lab[1], lab[2]),
-        posX: (p.pos?.[0] ?? 0.5) + (ptr[0] || 0) * (0.012 + 0.005 * idx),
-        posY: (p.pos?.[1] ?? 0.5) + (ptr[1] || 0) * (0.012 + 0.005 * idx),
+        posX: (p.pos?.[0] ?? 0.5) + (ptr[0] || 0) * (0.0012 + 0.0003 * idx),
+        posY: (p.pos?.[1] ?? 0.5) + (ptr[1] || 0) * (0.0012 + 0.0003 * idx),
         radius: Math.max(0.035, p.radius ?? 0.4),
         softness: Math.min(1.6, Math.max(0.05, p.softness ?? 0.65)),
         invSx: 1 / Math.max(0.08, Math.abs(stretch[0] || 1)),
@@ -1251,7 +1251,6 @@ export class SphereRenderer {
         const pmX = (uvX - 0.5) * metricX;
         const pmY = (uvY - 0.5) * metricY;
 
-        // Smooth analytical trigonometric domain warp approximation
         const qx = pmX * warpScale + phase[0] + flowCos * time * 0.055;
         const qy = pmY * warpScale + phase[1] + flowSin * time * 0.055;
         const n1 = Math.sin(qx * 2.1 + Math.cos(qy * 1.9 + 0.7)) * 0.65;
@@ -1285,7 +1284,6 @@ export class SphereRenderer {
           const dist = Math.hypot(lx, ly);
 
           let w = 0;
-          let pL = p.L;
           if (styleCode === 1) {
             const sphereR = Math.max(0.04, p.radius * 0.52);
             const rNorm = dist / sphereR;
@@ -1300,7 +1298,7 @@ export class SphereRenderer {
             w = p.weight * Math.exp(-Math.pow(Math.max(1e-5, dist / effR), expP)) * 1.62;
           }
 
-          sumL += pL * w;
+          sumL += p.L * w;
           sumA += p.a * w;
           sumB += p.b * w;
           sumC += p.chroma * w;
@@ -1348,7 +1346,6 @@ export class SphereRenderer {
     ctx.imageSmoothingQuality = 'high';
     ctx.drawImage(this._fallbackCanvas, 0, 0, width, height);
 
-    // Tile fine monochromatic grain overlay in Canvas2D mode
     const effectiveGrain = normalizeEffectiveGrain(lighting.grain, grainScale);
     if (effectiveGrain > 0 && typeof document !== 'undefined') {
       this._ensureFallbackGrainTile(scene.seed);
@@ -1401,7 +1398,6 @@ export class SphereRenderer {
     this._grainCanvas = c;
   }
 
-  /** Releases all WebGL2 resources, timer queries, event listeners, and animation loops. */
   destroy() {
     if (this._destroyed) return;
     this._destroyed = true;
@@ -1431,8 +1427,14 @@ export class SphereRenderer {
     this._program = null;
     this.gl = null;
     this.ctx2d = null;
+    this._fallbackCanvas = null;
+    this._fallbackCtx = null;
+    this._fallbackImageData = null;
+    this._grainCanvas = null;
     this._lastScene = null;
     this._motionScene = null;
+    this._morphFrom = null;
+    this._morphScratch = null;
   }
 }
 
