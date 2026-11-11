@@ -679,7 +679,11 @@ function synthesizeChordSpec(rng, mood, { h0, h1, h2, h3, cScale = 1, baseOverri
 
   if (eclipse) {
     const dark = mood === 'dark';
-    const base = baseOverride || (dark ? [rng.range(0.080, 0.105), rng.range(0.010, 0.022), h0] : [rng.range(0.955, 0.975), 0.014, h0]);
+    const base = dark && baseOverride
+      ? baseOverride
+      : dark
+        ? [rng.range(0.080, 0.105), rng.range(0.010, 0.022), h0]
+        : [rng.range(0.955, 0.975), 0.014, h0];
     const discL = dark ? clamp(base[0] - 0.012, 0.062, 0.098) : rng.range(0.935, 0.962);
     return {
       base,
@@ -1142,7 +1146,15 @@ export function generateScene({
     const avgL = parsedCustomLabs.reduce((acc, c) => acc + c[0], 0) / parsedCustomLabs.length;
     resolvedMood = VALID_MOODS.includes(requestedMood) ? requestedMood : avgL < 0.45 ? 'dark' : avgL > 0.78 ? 'light' : 'split';
   } else if (activeCol) {
-    resolvedMood = VALID_MOODS.includes(requestedMood) ? requestedMood : requestedMood === 'daylight' ? (activeCol.mood === 'split' ? 'split' : 'light') : activeCol.mood || 'dark';
+    resolvedMood = VALID_MOODS.includes(requestedMood)
+      ? requestedMood
+      : requestedMood === 'daylight'
+        ? activeCol.mood === 'split'
+          ? 'split'
+          : 'light'
+        : rawMood === 'any'
+          ? rng.pick(VALID_MOODS)
+          : activeCol.mood || 'dark';
   } else if (selectedMeta) {
     resolvedMood = VALID_MOODS.includes(requestedMood) ? requestedMood : selectedMeta.mood;
   } else if (VALID_MOODS.includes(requestedMood)) {

@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.4.2] - 2026-11-11
+
+### Fixed
+- Studio URL initialization now applies `?preview=website` (`view=`), `mood`, `grain`, `motion`, `light`, `hour`, and `arch` even when `seed` or `style` is omitted from the URL, and responds to live `hashchange` updates.
+- `parsePresetUrl` and `formatPresetUrl` now round-trip `preview` (`canvas` | `website` | `wallpaper`), `light=0`, and `hour` (automatically enabling `solar` when `hour` is set).
+- Fixed *Boyne Solstice* (`eclipse` topology) in `Light` and `Split` modes so `baseOverride` only applies to dark moods, preserving `WCAG >= 4.5:1` contrast across all 15 atlases and all moods.
+- Fixed Studio `System`, `Any`, and `Auto` toggles when an Optical Atlas is active, cleared active atlas scenes when clicking `All 15` in the Atlases drawer, and updated Solar Clock scrubbing to replace the current scene in place without flooding history.
+
 ## [1.4.1] - 2026-11-10
 
 ### Added

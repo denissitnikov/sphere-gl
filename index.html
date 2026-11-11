@@ -263,6 +263,11 @@
       transition: opacity 0.30s cubic-bezier(0.16, 1, 0.3, 1), transform 0.30s cubic-bezier(0.16, 1, 0.3, 1), visibility 0s linear 0s;
     }
 
+    body[data-preview="website"].drawer-open .website-preview {
+      opacity: 0.16;
+      pointer-events: none;
+    }
+
     .hero-eyebrow {
       display: inline-flex;
       align-items: center;
@@ -1305,6 +1310,7 @@
   <script type="module">
     import {
       SphereRenderer,
+      STYLE_MODES,
       ARCHETYPES,
       COLLECTIONS,
       ATLAS_GROUPS,
@@ -1316,7 +1322,7 @@
       detectColorScheme,
     } from './src/index.js';
 
-    const VERSION = 'v1.4.1';
+    const VERSION = 'v1.4.2';
     const CDN_SCRIPT = `https://cdn.jsdelivr.net/gh/denissitnikov/sphere-gl@${VERSION}/dist/sphere-gl.min.js`;
     const CDN_ESM = `https://cdn.jsdelivr.net/gh/denissitnikov/sphere-gl@${VERSION}/dist/sphere-gl.esm.min.js`;
     const CDN_FRAMER = `https://cdn.jsdelivr.net/gh/denissitnikov/sphere-gl@${VERSION}/dist/sphere-gl.framer.js`;
@@ -1463,6 +1469,8 @@
     function syncUrlHash(scene) {
       const grainScale = GRAIN_PRESETS[grainIdx].scale;
       const params = new URLSearchParams();
+      const previewMode = document.body.dataset.preview || 'canvas';
+      if (previewMode !== 'canvas') params.set('preview', previewMode);
       params.set('seed', scene.seed);
       if (scene.collection) params.set('col', scene.collection);
       params.set('style', scene.style);
@@ -1472,9 +1480,10 @@
       }
       params.set('grain', String(grainScale));
       if (motionEnabled) params.set('motion', '1');
+      if (!whisperEnabled) params.set('light', '0');
       if (solarEnabled) params.set('solar', '1');
       if (solarEnabled && Number.isFinite(solarHour)) params.set('hour', String(Math.round(solarHour * 100) / 100));
-      window.history.replaceState(null, '', `#${params.toString()}`);
+      window.history.replaceState(null, '', `${window.location.pathname}#${params.toString()}`);
     }
 
     let themeMeta = document.querySelector('meta[name="theme-color"]');
@@ -1530,14 +1539,29 @@
       }
     }
 
+    function syncStyleButtons() {
+      for (const b of document.querySelectorAll('[data-style]')) {
+        b.classList.toggle('active', b.dataset.style === styleFilter);
+      }
+    }
+
+    function syncMoodButtons() {
+      for (const b of document.querySelectorAll('[data-mood]')) {
+        b.classList.toggle('active', b.dataset.mood === moodFilter);
+      }
+    }
+
     function renderActiveScene({ morph = false, prevScene = null } = {}) {
       if (!currentScene) return;
       const grainScale = GRAIN_PRESETS[grainIdx].scale;
       renderer.resize();
       if (motionEnabled) {
-        renderer.stopMotion();
         renderer.startMotion(currentScene, { grainScale });
+        if (morph && prevScene) {
+          renderer.morphTo(currentScene, { grainScale, duration: 520 });
+        }
       } else if (morph && prevScene) {
+        renderer.stopMotion();
         renderer.morphTo(currentScene, { grainScale, duration: 520 });
       } else {
         renderer.stopMotion();
@@ -1546,19 +1570,31 @@
       updateUIForScene(currentScene);
     }
 
-    function pushNewScene(overrides = {}) {
-      const prevScene = currentScene;
+    function computeNextScene(overrides = {}) {
       const activeCol = overrides.collection !== undefined ? overrides.collection : collectionFilter;
-      const scene = generateScene({
-        seed: overrides.seed || randomSeed(),
-        style: overrides.style ?? styleFilter,
-        mood: overrides.mood ?? moodFilter,
+      const requestedStyle = overrides.style ?? styleFilter;
+      const requestedMood = overrides.mood ?? moodFilter;
+      const seed = overrides.seed || randomSeed();
+      const effectiveStyle =
+        requestedStyle === 'auto' && activeCol
+          ? STYLE_MODES[Math.floor(Math.random() * STYLE_MODES.length)]
+          : requestedStyle;
+      return generateScene({
+        seed,
+        style: effectiveStyle,
+        mood: requestedMood,
         archetype: overrides.archetype ?? archetypeFilter,
         collection: activeCol,
         colors: overrides.colors ?? null,
+        colorScheme: requestedMood === 'system' ? detectColorScheme() : null,
         solar: solarEnabled,
         solarHour,
       });
+    }
+
+    function pushNewScene(overrides = {}) {
+      const prevScene = currentScene;
+      const scene = computeNextScene(overrides);
 
       if (historyIndex < history.length - 1) {
         history.splice(historyIndex + 1);
@@ -1567,6 +1603,22 @@
       if (history.length > 60) history.shift();
       historyIndex = history.length - 1;
 
+      currentScene = scene;
+      renderActiveScene({ morph: Boolean(overrides.morph && prevScene), prevScene });
+    }
+
+    function replaceCurrentScene(overrides = {}) {
+      const prevScene = currentScene;
+      const scene = computeNextScene({
+        seed: overrides.seed || currentScene?.seed || randomSeed(),
+        ...overrides,
+      });
+      if (historyIndex >= 0 && historyIndex < history.length) {
+        history[historyIndex] = scene;
+      } else {
+        history.push(scene);
+        historyIndex = history.length - 1;
+      }
       currentScene = scene;
       renderActiveScene({ morph: Boolean(overrides.morph && prevScene), prevScene });
     }
@@ -1597,8 +1649,13 @@
       allBtn.className = `col-pill${!collectionFilter ? ' active' : ''}`;
       allBtn.textContent = `All ${visibleCols.length}`;
       allBtn.addEventListener('click', () => {
+        const hadCol = Boolean(collectionFilter);
         collectionFilter = null;
+        collectionsBtn.classList.toggle('active', collectionsDrawer.classList.contains('open'));
         renderCollectionsDrawer();
+        if (hadCol) {
+          pushNewScene({ collection: null, morph: true });
+        }
       });
       collectionPillsEl.appendChild(allBtn);
 
@@ -1608,16 +1665,18 @@
         pill.textContent = col.name;
         pill.addEventListener('click', () => {
           collectionFilter = col.id;
+          archetypeFilter = 'auto';
+          archetypeSelect.value = 'auto';
           styleFilter = col.style || styleFilter;
-          for (const b of document.querySelectorAll('[data-style]')) {
-            b.classList.toggle('active', b.dataset.style === styleFilter);
-          }
+          moodFilter = col.mood || moodFilter;
+          syncStyleButtons();
+          syncMoodButtons();
           renderCollectionsDrawer();
           pushNewScene({
             seed: col.heroes[0],
             collection: col.id,
             style: col.style,
-            mood: col.mood || moodFilter,
+            mood: moodFilter,
             morph: true,
           });
         });
@@ -1661,15 +1720,17 @@
           card.appendChild(meta);
           card.addEventListener('click', () => {
             collectionFilter = col.id;
+            archetypeFilter = 'auto';
+            archetypeSelect.value = 'auto';
             styleFilter = col.style || styleFilter;
-            for (const b of document.querySelectorAll('[data-style]')) {
-              b.classList.toggle('active', b.dataset.style === styleFilter);
-            }
+            moodFilter = col.mood || moodFilter;
+            syncStyleButtons();
+            syncMoodButtons();
             pushNewScene({
               seed: heroSeed,
               collection: col.id,
               style: col.style,
-              mood: col.mood || moodFilter,
+              mood: moodFilter,
               morph: true,
             });
             renderCollectionsDrawer();
@@ -1690,8 +1751,11 @@
           const previewScene = generateScene({
             seed: item.seed,
             collection: col.id,
-            style: col.style,
-            mood: col.mood || moodFilter,
+            style: styleFilter === 'auto' ? col.style : styleFilter,
+            mood: moodFilter,
+            colorScheme: moodFilter === 'system' ? detectColorScheme() : null,
+            solar: solarEnabled,
+            solarHour,
           });
           baker.renderOnce(previewScene, { grainScale });
 
@@ -1717,8 +1781,8 @@
             pushNewScene({
               seed: item.seed,
               collection: col.id,
-              style: col.style,
-              mood: col.mood || moodFilter,
+              style: styleFilter,
+              mood: moodFilter,
               morph: true,
             });
             for (const el of collectionGridEl.querySelectorAll('.col-card')) {
@@ -1734,6 +1798,7 @@
     function toggleCollectionsDrawer(force) {
       const nextOpen = force !== undefined ? force : !collectionsDrawer.classList.contains('open');
       collectionsDrawer.classList.toggle('open', nextOpen);
+      document.body.classList.toggle('drawer-open', nextOpen);
       collectionsBtn.classList.toggle('active', nextOpen || Boolean(collectionFilter));
       if (nextOpen) renderCollectionsDrawer();
     }
@@ -1742,61 +1807,123 @@
     document.getElementById('close-col-btn').addEventListener('click', () => toggleCollectionsDrawer(false));
     document.getElementById('shuffle-col-btn').addEventListener('click', () => {
       if (!collectionFilter) {
-        const randomCol = COLLECTIONS[Math.floor(Math.random() * COLLECTIONS.length)];
+        const pool = visibleColsFor(groupFilter);
+        const randomCol = pool[Math.floor(Math.random() * pool.length)] || COLLECTIONS[0];
         collectionFilter = randomCol.id;
+        styleFilter = randomCol.style || styleFilter;
+        moodFilter = randomCol.mood || moodFilter;
+        syncStyleButtons();
+        syncMoodButtons();
       }
       renderCollectionsDrawer();
       pushNewScene({ morph: true });
     });
 
-    function initFromUrlOrDefault() {
+    function readUrlPreviewMode() {
+      const merged = new URLSearchParams(window.location.search.replace(/^\?/, ''));
+      const hash = window.location.hash.replace(/^#/, '');
+      if (hash) {
+        for (const [k, v] of new URLSearchParams(hash).entries()) {
+          merged.set(k, v);
+        }
+      }
+      const raw = (merged.get('preview') || merged.get('view') || '').trim().toLowerCase();
+      if (raw === 'website' || raw === 'wallpaper' || raw === 'canvas') return raw;
+      return null;
+    }
+
+    function applyUrlState({ morph = false } = {}) {
       const parsed = parsePresetUrl(window.location.href);
-      if (parsed.solar) {
-        solarEnabled = true;
+      const preview = parsed.preview || readUrlPreviewMode();
+      if (preview) {
+        setPreviewMode(preview, false);
+      }
+
+      if (parsed.solar !== undefined || parsed.solarHour !== undefined) {
+        solarEnabled = parsed.solar !== undefined ? Boolean(parsed.solar) : true;
         solarHour = Number.isFinite(parsed.solarHour) ? parsed.solarHour : null;
         syncSolarUi();
         scheduleSolarTick();
       }
-      if (parsed.seed || parsed.style || parsed.colors || parsed.collection) {
-        if (parsed.collection) {
-          collectionFilter = parsed.collection;
-        }
-        if (parsed.style) {
-          styleFilter = parsed.style;
-          for (const b of document.querySelectorAll('[data-style]')) {
-            b.classList.toggle('active', b.dataset.style === parsed.style);
-          }
-        }
-        if (parsed.grain !== undefined) {
-          const matchIdx = GRAIN_PRESETS.findIndex((p) => Math.abs(p.scale - parsed.grain) < 0.1);
-          if (matchIdx >= 0) {
-            grainIdx = matchIdx;
-            grainBtn.textContent = GRAIN_PRESETS[grainIdx].label;
-          }
-        }
-        if (parsed.motion) {
-          motionEnabled = true;
-          motionBtn.textContent = 'Drift 60fps';
-          motionBtn.classList.add('active');
-        }
-        if (parsed.mood) {
-          moodFilter = parsed.mood === 'auto' ? 'any' : parsed.mood;
-          for (const b of document.querySelectorAll('[data-mood]')) {
-            b.classList.toggle('active', b.dataset.mood === moodFilter);
-          }
-        }
-        pushNewScene({
-          seed: parsed.seed,
-          style: parsed.style || 'sphere',
-          mood: parsed.mood || moodFilter,
-          archetype: parsed.harmony || 'auto',
-          collection: parsed.collection || null,
-          colors: parsed.colors || null,
-        });
-        return;
+
+      if (parsed.lightFollow !== undefined) {
+        whisperEnabled = Boolean(parsed.lightFollow);
+        whisperBtn.textContent = whisperEnabled ? 'Solas Light ✦' : 'Solas: Off';
+        whisperBtn.classList.toggle('active', whisperEnabled);
       }
-      pushNewScene();
+
+      if (parsed.grain !== undefined) {
+        const matchIdx = GRAIN_PRESETS.findIndex((p) => Math.abs(p.scale - parsed.grain) < 0.1);
+        if (matchIdx >= 0) {
+          grainIdx = matchIdx;
+          grainBtn.textContent = GRAIN_PRESETS[grainIdx].label;
+        }
+      }
+
+      if (parsed.motion !== undefined) {
+        motionEnabled = Boolean(parsed.motion);
+        motionBtn.textContent = motionEnabled ? 'Drift 60fps' : 'Static 0%';
+        motionBtn.classList.toggle('active', motionEnabled);
+      }
+
+      if (parsed.collection) {
+        const colObj = COLLECTIONS.find((c) => c.id === parsed.collection) || null;
+        collectionFilter = colObj ? colObj.id : parsed.collection;
+        if (colObj && !parsed.style) {
+          styleFilter = colObj.style || styleFilter;
+        }
+        if (colObj && !parsed.mood) {
+          moodFilter = colObj.mood || moodFilter;
+        }
+      }
+
+      if (parsed.harmony) {
+        const hasOpt = Array.from(archetypeSelect.options).some((o) => o.value === parsed.harmony);
+        if (hasOpt) {
+          archetypeFilter = parsed.harmony;
+          archetypeSelect.value = parsed.harmony;
+        }
+      }
+
+      if (parsed.style) {
+        styleFilter = parsed.style;
+      }
+      syncStyleButtons();
+
+      if (parsed.mood) {
+        moodFilter = parsed.mood === 'auto' ? 'any' : parsed.mood;
+      }
+      syncMoodButtons();
+
+      pushNewScene({
+        seed: parsed.seed || (!parsed.collection && currentScene?.seed ? currentScene.seed : undefined),
+        style: styleFilter,
+        mood: moodFilter,
+        archetype: archetypeFilter,
+        collection: collectionFilter,
+        colors: parsed.colors || null,
+        morph,
+      });
     }
+
+    function initFromUrlOrDefault() {
+      applyUrlState({ morph: false });
+    }
+
+    window.addEventListener('hashchange', () => {
+      const parsed = parsePresetUrl(window.location.href);
+      if (parsed.preview && parsed.preview !== document.body.dataset.preview) {
+        setPreviewMode(parsed.preview, false);
+      }
+      if (
+        (parsed.seed && parsed.seed !== currentScene?.seed) ||
+        (parsed.collection && parsed.collection !== currentScene?.collection) ||
+        (parsed.style && parsed.style !== currentScene?.style) ||
+        (parsed.mood && parsed.mood !== currentScene?.mood)
+      ) {
+        applyUrlState({ morph: true });
+      }
+    });
 
     canvas.addEventListener('click', () => {
       if (collectionsDrawer.classList.contains('open')) {
@@ -1855,23 +1982,22 @@
       const btn = e.target.closest('[data-style]');
       if (!btn) return;
       styleFilter = btn.dataset.style;
-      for (const b of document.querySelectorAll('[data-style]')) {
-        b.classList.toggle('active', b === btn);
-      }
+      syncStyleButtons();
       pushNewScene({
         seed: styleFilter === 'auto' ? randomSeed() : currentScene?.seed,
         style: styleFilter,
         morph: true,
       });
+      if (collectionsDrawer.classList.contains('open')) {
+        renderCollectionsDrawer();
+      }
     });
 
     document.getElementById('mood-group').addEventListener('click', (e) => {
       const btn = e.target.closest('[data-mood]');
       if (!btn) return;
       moodFilter = btn.dataset.mood;
-      for (const b of document.querySelectorAll('[data-mood]')) {
-        b.classList.toggle('active', b === btn);
-      }
+      syncMoodButtons();
       if (moodFilter !== 'any' && archetypeFilter !== 'auto') {
         const match = ARCHETYPES.find((a) => a.id === archetypeFilter);
         const sysScheme = detectColorScheme();
@@ -1887,8 +2013,11 @@
           archetypeSelect.value = 'auto';
         }
       }
-      // Keep the same seed when switching Light <-> Split <-> Dark so lockGeometrySeed glides Day <-> Night!
-      pushNewScene({ seed: currentScene?.seed, morph: true });
+      const nextSeed = moodFilter === 'any' ? randomSeed() : currentScene?.seed;
+      pushNewScene({ seed: nextSeed, mood: moodFilter, morph: true });
+      if (collectionsDrawer.classList.contains('open')) {
+        renderCollectionsDrawer();
+      }
     });
 
     archetypeSelect.addEventListener('change', () => {
@@ -1898,9 +2027,7 @@
         const meta = ARCHETYPES.find((a) => a.id === archetypeFilter);
         if (meta && meta.mood && meta.mood !== 'auto') {
           moodFilter = meta.mood;
-          for (const b of document.querySelectorAll('[data-mood]')) {
-            b.classList.toggle('active', b.dataset.mood === moodFilter);
-          }
+          syncMoodButtons();
         }
       }
       pushNewScene({ morph: true });
@@ -1919,6 +2046,10 @@
       whisperBtn.classList.toggle('active', whisperEnabled);
       if (!whisperEnabled && currentScene) {
         renderer.wakePointer(0, 0, { strength: 0, grainScale: GRAIN_PRESETS[grainIdx].scale });
+      }
+      if (currentScene) {
+        syncUrlHash(currentScene);
+        if (codeModal.classList.contains('open')) renderSnippet();
       }
       if (whisperEnabled && isCoarsePointer) {
         enableTiltLight().then((ok) => {
@@ -2001,7 +2132,7 @@
       solarHour = on ? hour : null;
       syncSolarUi();
       scheduleSolarTick();
-      if (currentScene) pushNewScene({ seed: currentScene.seed, morph: true });
+      if (currentScene) replaceCurrentScene({ seed: currentScene.seed, morph: true });
     }
     solarBtn.addEventListener('click', () => {
       setSolar(!solarEnabled, null);
@@ -2009,12 +2140,13 @@
     });
     let scrubRaf = 0;
     solarRange.addEventListener('input', () => {
+      solarEnabled = true;
       solarHour = Number(solarRange.value);
       syncSolarUi();
       if (scrubRaf) return;
       scrubRaf = requestAnimationFrame(() => {
         scrubRaf = 0;
-        if (currentScene) pushNewScene({ seed: currentScene.seed, morph: true });
+        if (currentScene) replaceCurrentScene({ seed: currentScene.seed, morph: false });
       });
     });
     solarNowBtn.addEventListener('click', () => setSolar(true, null));
@@ -2025,7 +2157,7 @@
       }
       if (!currentScene) return;
       if (solarEnabled && !Number.isFinite(solarHour)) {
-        pushNewScene({ seed: currentScene.seed, morph: true });
+        replaceCurrentScene({ seed: currentScene.seed, morph: true });
         syncSolarUi();
       } else {
         renderActiveScene();
@@ -2041,10 +2173,24 @@
     motionBtn.addEventListener('click', toggleMotion);
 
     // 3-Mode Context Preview Switcher
-    function setPreviewMode(mode) {
+    const websitePreviewEl = document.getElementById('website-preview');
+    const wallpaperPreviewEl = document.getElementById('wallpaper-preview');
+    function setPreviewMode(mode, syncUrl = true) {
       document.body.dataset.preview = mode;
+      if (websitePreviewEl) websitePreviewEl.setAttribute('aria-hidden', String(mode !== 'website'));
+      if (wallpaperPreviewEl) wallpaperPreviewEl.setAttribute('aria-hidden', String(mode !== 'wallpaper'));
+      if (mode === 'wallpaper' && window.innerWidth <= 600 && resSelect.value === '3840x2160') {
+        resSelect.value = '1320x2868';
+        document.body.dataset.wallpaperDevice = 'mobile';
+      }
       for (const b of document.querySelectorAll('[data-prev]')) {
         b.classList.toggle('active', b.dataset.prev === mode);
+      }
+      if (syncUrl && currentScene) {
+        syncUrlHash(currentScene);
+      }
+      if (codeModal.classList.contains('open')) {
+        renderSnippet();
       }
     }
 
@@ -2133,6 +2279,10 @@
       const presetLink = formatPresetUrl(currentScene, {
         grain: grainScale,
         motion: motionEnabled,
+        lightFollow: whisperEnabled,
+        solar: solarEnabled,
+        solarHour,
+        preview: document.body.dataset.preview,
         lockSeed: snippetMode !== 'random',
         colors: snippetMode === 'custom' ? sw.slice(0, 4) : null,
       });
@@ -2143,12 +2293,15 @@
         const atlasAttr = snippetMode !== 'custom' && col ? `\n  data-sphere-atlas="${col}"` : '';
         const archAttr = snippetMode !== 'custom' && !col && ar !== 'auto' ? `\n  data-sphere-harmony="${ar}"` : '';
         const motionAttr = motionEnabled ? `\n  data-sphere-motion="true"` : '';
+        const lightAttr = !whisperEnabled ? `\n  data-sphere-light-follow="false"` : '';
+        const solarAttr = solarEnabled ? `\n  data-sphere-solar` : '';
+        const hourAttr = solarEnabled && Number.isFinite(solarHour) ? `\n  data-sphere-hour="${Math.round(solarHour * 100) / 100}"` : '';
         snippetCode.textContent = `<body
   data-sphere-bg
   data-transition-in${seedAttr}${colorsAttr}${atlasAttr}
   data-sphere-style="${st}"
   data-sphere-mood="${md}"${archAttr}
-  data-sphere-grain="${grainScale}"${motionAttr}
+  data-sphere-grain="${grainScale}"${motionAttr}${lightAttr}${solarAttr}${hourAttr}
 >
   <h1 style="color: var(--sphere-ink)">Hello World</h1>
   <script src="${CDN_SCRIPT}" defer><\/script>
@@ -2160,10 +2313,11 @@
             : col
               ? `  --sphere-atlas: ${col};\n`
               : '';
+        const solarVar = solarEnabled ? `  --sphere-solar: 1;\n` : '';
         snippetCode.textContent = `#hero {
 ${customVars}  --sphere-style: ${st};
   --sphere-grain: ${grainScale};
-  color: var(--sphere-ink);
+${solarVar}  color: var(--sphere-ink);
 }
 
 #hero .glass-card {
@@ -2176,12 +2330,14 @@ ${customVars}  --sphere-style: ${st};
 <script src="${CDN_SCRIPT}" defer><\/script>`;
       } else if (snippetApi === 'react') {
         const atlasLine = col && snippetMode !== 'custom' ? `\n      atlas="${col}"` : '';
+        const solarLine = solarEnabled ? `\n      solar={true}` : '';
+        const lightLine = !whisperEnabled ? `\n      lightFollow={false}` : '';
         const propLines =
           snippetMode === 'locked'
             ? `url="${presetLink}"`
             : snippetMode === 'custom'
-              ? `mode="${st}"\n      colors={${JSON.stringify(sw.slice(0, 4))}}\n      grain={${grainScale}}`
-              : `mode="${st}"\n      mood="${md}"${atlasLine}\n      grain={${grainScale}}`;
+              ? `mode="${st}"\n      colors={${JSON.stringify(sw.slice(0, 4))}}\n      grain={${grainScale}}${solarLine}${lightLine}`
+              : `mode="${st}"\n      mood="${md}"${atlasLine}\n      grain={${grainScale}}${solarLine}${lightLine}`;
         snippetCode.textContent = `// npm install sphere-gl
 import { SphereBackground } from 'sphere-gl/react';
 

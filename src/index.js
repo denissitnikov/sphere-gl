@@ -103,6 +103,10 @@ export function parsePresetUrl(urlOrQuery) {
   }
 
   const out = {};
+  if (merged.has('preview') || merged.has('view')) {
+    const p = (merged.get('preview') || merged.get('view') || '').trim().toLowerCase();
+    if (p === 'website' || p === 'wallpaper' || p === 'canvas') out.preview = p;
+  }
   if (merged.has('seed')) {
     const s = merged.get('seed').trim();
     if (s && s !== 'auto' && s !== 'random') out.seed = s.toUpperCase();
@@ -132,15 +136,25 @@ export function parsePresetUrl(urlOrQuery) {
   if (merged.has('motion')) {
     out.motion = parseBool(merged.get('motion'), false);
   }
-  if (merged.has('light') || merged.has('whisper')) {
-    const rawL = merged.get('light') ?? merged.get('whisper');
-    const numL = Number(rawL);
-    out.lightFollow = Number.isFinite(numL) && rawL.trim() !== '' ? numL : parseBool(rawL, true);
+  if (merged.has('light') || merged.has('whisper') || merged.has('solas')) {
+    const rawL = String(merged.get('light') ?? merged.get('whisper') ?? merged.get('solas') ?? '').trim();
+    const lowL = rawL.toLowerCase();
+    if (lowL === '0' || lowL === 'false' || lowL === 'off' || lowL === 'no') {
+      out.lightFollow = false;
+    } else if (lowL === '1' || lowL === 'true' || lowL === 'on' || lowL === 'yes' || lowL === '') {
+      out.lightFollow = true;
+    } else {
+      const numL = Number(rawL);
+      out.lightFollow = Number.isFinite(numL) ? numL : true;
+    }
   }
   if (merged.has('solar')) out.solar = parseBool(merged.get('solar'), true);
   if (merged.has('hour')) {
     const hr = Number(merged.get('hour'));
-    if (Number.isFinite(hr)) out.solarHour = hr;
+    if (Number.isFinite(hr)) {
+      out.solarHour = hr;
+      if (!merged.has('solar')) out.solar = true;
+    }
   }
   if (merged.has('colors')) {
     const list = merged
@@ -162,10 +176,13 @@ export function formatPresetUrl(
     colors = null,
     solar = false,
     solarHour = null,
+    lightFollow = true,
+    preview = null,
     baseUrl = 'https://denissitnikov.github.io/sphere-gl/',
   } = {},
 ) {
   const params = new URLSearchParams();
+  if (preview && preview !== 'canvas') params.set('preview', preview);
   const col = scene?.atlas || scene?.collection;
   if (lockSeed && scene?.seed) params.set('seed', scene.seed);
   if (col) params.set('col', col);
@@ -176,6 +193,7 @@ export function formatPresetUrl(
   }
   if (Number.isFinite(grain)) params.set('grain', String(grain));
   if (motion) params.set('motion', '1');
+  if (lightFollow === false || lightFollow === 0) params.set('light', '0');
   if (solar || scene?.solar) params.set('solar', '1');
   if (Number.isFinite(solarHour)) params.set('hour', String(Math.round(solarHour * 100) / 100));
   if (Array.isArray(colors) && colors.length >= 2) {
@@ -406,6 +424,7 @@ export function mountSphereBackground(target, options = {}) {
 
   function applyScene(seedOverride, { morph = false, morphDuration = 540 } = {}) {
     const prevScene = currentScene;
+    const isSystemMood = String(cfg.mood || 'system').trim().toLowerCase() === 'system';
     currentScene = generateScene({
       seed: seedOverride,
       style: cfg.style,
@@ -413,6 +432,7 @@ export function mountSphereBackground(target, options = {}) {
       archetype: cfg.archetype,
       collection: cfg.collection,
       colors: cfg.colors,
+      colorScheme: isSystemMood ? detectColorScheme() : null,
       solar: cfg.solar,
       solarHour: cfg.solarHour,
     });
@@ -428,9 +448,15 @@ export function mountSphereBackground(target, options = {}) {
 
     renderer.resize();
     if (cfg.motion && !prefersReducedMotion) {
-      renderer.stopMotion();
       renderer.startMotion(currentScene, { grainScale: cfg.grainScale });
+      if (morph && prevScene) {
+        renderer.morphTo(currentScene, {
+          duration: morphDuration,
+          grainScale: cfg.grainScale,
+        });
+      }
     } else if (morph && prevScene && !prefersReducedMotion) {
+      renderer.stopMotion();
       renderer.morphTo(currentScene, {
         duration: morphDuration,
         grainScale: cfg.grainScale,

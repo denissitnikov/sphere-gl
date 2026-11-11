@@ -86,10 +86,14 @@ if (customScene.archetypeId !== 'custom-palette' || !customScene.isDark) {
   throw new Error('Custom dark brand palette failed');
 }
 
-// 4. Test Preset URL formatting & parsing
+// 4. Test Preset URL formatting & parsing (including ?preview=website, hour, lightFollow)
 const presetUrl = formatPresetUrl(customScene, {
   grain: 1.65,
   motion: true,
+  lightFollow: false,
+  solar: true,
+  solarHour: 7.5,
+  preview: 'website',
   lockSeed: true,
   colors: ['#04070F', '#0A84FF'],
 });
@@ -99,9 +103,21 @@ if (
   parsed.style !== 'sphere' ||
   parsed.grain !== 1.65 ||
   parsed.motion !== true ||
+  parsed.lightFollow !== false ||
+  parsed.solar !== true ||
+  parsed.solarHour !== 7.5 ||
+  parsed.preview !== 'website' ||
   parsed.colors.length !== 2
 ) {
   throw new Error(`Preset URL roundtrip failed: ${JSON.stringify(parsed)}`);
+}
+const slidetabLink = parsePresetUrl('https://denissitnikov.github.io/sphere-gl/?preview=website');
+if (slidetabLink.preview !== 'website') {
+  throw new Error(`Expected ?preview=website to parse preview='website', got ${JSON.stringify(slidetabLink)}`);
+}
+const hourOnlyLink = parsePresetUrl('#hour=6.25&light=0');
+if (hourOnlyLink.solar !== true || hourOnlyLink.solarHour !== 6.25 || hourOnlyLink.lightFollow !== false) {
+  throw new Error(`Expected #hour=6.25&light=0 to enable solar and disable lightFollow, got ${JSON.stringify(hourOnlyLink)}`);
 }
 
 // 5. Test `mood: 'system'` strict OS Light vs Dark schema alignment across 400 seeds
@@ -126,16 +142,27 @@ if (COLLECTIONS.filter((c) => c.group === 'emerald').length !== 7) {
 }
 for (const col of COLLECTIONS) {
   for (const heroSeed of col.heroes) {
-    const sc = generateScene({ seed: heroSeed, collection: col.id });
-    if (sc.collection !== col.id) {
-      throw new Error(`Expected collection ${col.id}, got ${sc.collection}`);
+    for (const moodOverride of [undefined, 'light', 'split', 'dark']) {
+      const sc = generateScene({ seed: heroSeed, collection: col.id, mood: moodOverride });
+      if (sc.collection !== col.id) {
+        throw new Error(`Expected collection ${col.id}, got ${sc.collection}`);
+      }
+      if (moodOverride && sc.mood !== moodOverride) {
+        throw new Error(`Expected mood ${moodOverride} on collection ${col.id}, got ${sc.mood}`);
+      }
+      const cr = contrastRatio(sc.baseHex, sc.uiTokens.ink);
+      if (cr < 4.5) {
+        throw new Error(`Low contrast (${cr.toFixed(2)}) in collection ${col.id} hero ${heroSeed} mood ${sc.mood}`);
+      }
+      count++;
     }
-    const cr = contrastRatio(sc.baseHex, sc.uiTokens.ink);
-    if (cr < 4.5) {
-      throw new Error(`Low contrast (${cr.toFixed(2)}) in collection ${col.id} hero ${heroSeed}`);
-    }
-    count++;
   }
+  const sysDark = generateScene({ seed: col.heroes[0], collection: col.id, mood: 'system', colorScheme: 'dark' });
+  const sysLight = generateScene({ seed: col.heroes[0], collection: col.id, mood: 'system', colorScheme: 'light' });
+  if (!sysDark.isDark || sysLight.isDark) {
+    throw new Error(`Collection ${col.id} failed system colorScheme override`);
+  }
+  count += 2;
 }
 
 // 7. Test lockGeometrySeed Day <-> Night physical sphere anchoring & style count (4 modes, fluted removed)

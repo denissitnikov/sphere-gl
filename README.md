@@ -42,7 +42,7 @@ npm install sphere-gl
 Or load the self-mounting browser bundle directly from jsDelivr with no build step:
 
 ```html
-<script src="https://cdn.jsdelivr.net/gh/denissitnikov/sphere-gl@v1.4.1/dist/sphere-gl.min.js" defer></script>
+<script src="https://cdn.jsdelivr.net/gh/denissitnikov/sphere-gl@v1.4.2/dist/sphere-gl.min.js" defer></script>
 ```
 
 ## Quickstart
@@ -53,7 +53,7 @@ Add `data-sphere-bg` to `<body>` or any container element:
 <body data-sphere-bg data-transition-in data-sphere-style="sphere" data-sphere-grain="1.65">
   <h1 style="color: var(--sphere-ink)">A fresh background on every visit.</h1>
 
-  <script src="https://cdn.jsdelivr.net/gh/denissitnikov/sphere-gl@v1.4.1/dist/sphere-gl.min.js" defer></script>
+  <script src="https://cdn.jsdelivr.net/gh/denissitnikov/sphere-gl@v1.4.2/dist/sphere-gl.min.js" defer></script>
 </body>
 ```
 
@@ -88,7 +88,7 @@ Leave `--sphere-color-*` unset for automatic `OKLCH` palettes on every visit, pi
 
 ```html
 <section id="hero" data-sphere-bg data-transition-in>...</section>
-<script src="https://cdn.jsdelivr.net/gh/denissitnikov/sphere-gl@v1.4.1/dist/sphere-gl.min.js" defer></script>
+<script src="https://cdn.jsdelivr.net/gh/denissitnikov/sphere-gl@v1.4.2/dist/sphere-gl.min.js" defer></script>
 ```
 
 ### React and Next.js (`sphere-gl/react`)
@@ -125,7 +125,7 @@ You can also copy any URL from the [Live Studio](https://denissitnikov.github.io
 In Framer, open **Assets > Code > Create Code File** and paste one line to get right-sidebar controls for Palette, Atlas, Style, Mood, Film Grain, Solas Light, Solar Clock, and 60fps Drift:
 
 ```tsx
-export { default } from "https://cdn.jsdelivr.net/gh/denissitnikov/sphere-gl@v1.4.1/dist/sphere-gl.framer.js"
+export { default } from "https://cdn.jsdelivr.net/gh/denissitnikov/sphere-gl@v1.4.2/dist/sphere-gl.framer.js"
 ```
 
 ### Vanilla ES module and exports (`PNG`, `WebP`, `JPG`, `SVG`, `CSS`)
