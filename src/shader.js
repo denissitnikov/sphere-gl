@@ -496,14 +496,17 @@ function morphSceneInto(out, a, b, u) {
 }
 
 export class SphereRenderer {
-  constructor(canvas, { onTiming = null, maxDpr = 2, preserveDrawingBuffer = false } = {}) {
+  constructor(canvas, { onTiming = null, maxDpr = 3, pixelBudget = 5.2e6, interactiveBudget = 1.6e6, preserveDrawingBuffer = false } = {}) {
     if (!canvas) {
       throw new Error('SphereRenderer requires a valid canvas element.');
     }
 
     this.canvas = canvas;
     this.onTiming = typeof onTiming === 'function' ? onTiming : null;
-    this.maxDpr = Math.max(1, Number.isFinite(maxDpr) ? maxDpr : 2);
+    this.maxDpr = Math.max(1, Number.isFinite(maxDpr) ? maxDpr : 3);
+    this.pixelBudget = Math.max(2.5e5, Number.isFinite(pixelBudget) ? pixelBudget : 5.2e6);
+    this.interactiveBudget = Math.max(2.5e5, Number.isFinite(interactiveBudget) ? interactiveBudget : 1.6e6);
+    this._tier = 'static';
     this._preserveDrawingBuffer = Boolean(preserveDrawingBuffer);
 
     this.backend = 'webgl2';
@@ -665,12 +668,16 @@ export class SphereRenderer {
     return true;
   }
 
-  resize() {
+  // Interactive frames (drift, Solas, morph) render under a smaller pixel budget;
+  // the settled frame always renders at full device resolution.
+  resize(tier = this._tier) {
+    this._tier = tier === 'interactive' ? 'interactive' : 'static';
     const rawDpr = typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1;
-    const dpr = Math.min(rawDpr, this.maxDpr);
-
     const cssW = this.canvas.clientWidth || this.canvas.width || 1280;
     const cssH = this.canvas.clientHeight || this.canvas.height || 720;
+    const budget = this._tier === 'static' ? this.pixelBudget : this.interactiveBudget;
+    const fit = Math.sqrt(budget / Math.max(1, cssW * cssH));
+    const dpr = Math.max(this._tier === 'static' ? 1 : 0.75, Math.min(rawDpr, this.maxDpr, fit));
 
     const width = Math.max(1, Math.round(cssW * dpr));
     const height = Math.max(1, Math.round(cssH * dpr));
@@ -685,6 +692,10 @@ export class SphereRenderer {
     }
 
     return { width, height, dpr };
+  }
+
+  get tier() {
+    return this._tier;
   }
 
   get isWhispering() {
@@ -714,6 +725,7 @@ export class SphereRenderer {
       this._queryPollRafId = 0;
     }
     this._lastFrameNow = performance.now();
+    this.resize('interactive');
     const tick = (now) => {
       this._rafId = 0;
       if (this._destroyed) return;
@@ -757,7 +769,13 @@ export class SphereRenderer {
         }
       }
 
-      if (sceneToDraw) {
+      const stillRunning = this.isAnimating || this._whispering || this._morphActive;
+      if (stillRunning) {
+        if (sceneToDraw) {
+          this.render(sceneToDraw, { time: this._motionTime, pointer: this.pointer, whisper: this._whisper, grainScale: gs });
+        }
+      } else if (sceneToDraw) {
+        this.resize('static');
         this.render(sceneToDraw, { time: this._motionTime, pointer: this.pointer, whisper: this._whisper, grainScale: gs });
       }
       if (cbDone) {
@@ -767,7 +785,7 @@ export class SphereRenderer {
           cbDone.onComplete?.(cbDone.next);
         }
       }
-      if (this.isAnimating || this._whispering || this._morphActive) {
+      if (stillRunning) {
         this._rafId = requestAnimationFrame(tick);
       }
     };
@@ -1037,6 +1055,7 @@ export class SphereRenderer {
       cancelAnimationFrame(this._rafId);
       this._rafId = 0;
     }
+    this._tier = 'static';
   }
 
   stopLoop() {

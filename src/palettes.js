@@ -279,24 +279,60 @@ export const ARCHETYPES = [
 ];
 
 export const COLLECTIONS = [
-  { id: 'burren-chalk', name: 'Burren Chalk', tag: 'Limestone & Gorse', style: 'mesh', mood: 'light',
+  { id: 'burren-chalk', group: 'coast', name: 'Burren Chalk', tag: 'Limestone & Gorse', style: 'mesh', mood: 'light',
     heroes: ['7F3K9A', 'W4M9P2', 'H8T3C6', 'R2N7K5'], hues: [[26, 48], [62, 86], [136, 156]], baseH: [74, 90], cScale: 0.86, grain: [0.0235, 0.0258] },
-  { id: 'skellig-night', name: 'Skellig Night', tag: 'Atlantic Sapphire', style: 'silk', mood: 'dark',
+  { id: 'skellig-night', group: 'coast', name: 'Skellig Night', tag: 'Atlantic Sapphire', style: 'silk', mood: 'dark',
     heroes: ['X9K2V7', '3M8Q4Z', 'N6F2R9', 'P4W8J3'], hues: [[202, 236], [302, 344], [254, 284]], baseH: [256, 284], baseL: [0.095, 0.122], cScale: 1.38, poleLift: 0.14, fold: [0.38, 0.52], chromaPreserve: [0.58, 0.70] },
-  { id: 'antrim-basalt', name: 'Antrim Basalt', tag: 'Causeway Obsidian', style: 'silk', mood: 'dark',
+  { id: 'antrim-basalt', group: 'coast', name: 'Antrim Basalt', tag: 'Causeway Obsidian', style: 'silk', mood: 'dark',
     heroes: ['2B7K9M', 'Q5V8N2', 'K3D9F4', '8W2M6P'], activePoles: 3, hues: [[224, 262], [48, 76], [210, 245]], baseH: [235, 265], baseL: [0.088, 0.112], baseC: [0.006, 0.014], cScale: 0.13, vignette: [0.068, 0.098] },
-  { id: 'boyne-solstice', name: 'Boyne Solstice', tag: 'Chamber Corona', style: 'sphere', mood: 'dark',
+  { id: 'boyne-solstice', group: 'coast', name: 'Boyne Solstice', tag: 'Chamber Corona', style: 'sphere', mood: 'dark',
     heroes: ['E9C2L7', 'S4K8M3', '7R2W9P', 'D6F3Q8'], topology: 'eclipse', hues: [[24, 58], [46, 78], [348, 378]], baseH: [36, 64], baseL: [0.080, 0.105], baseC: [0.010, 0.022], cScale: 1.24, vignette: [0.065, 0.100], chromaPreserve: [0.56, 0.69] },
-  { id: 'wicklow-amber', name: 'Wicklow Amber', tag: 'Peat & Molten Gold', style: 'silk', mood: 'dark',
+  { id: 'wicklow-amber', group: 'coast', name: 'Wicklow Amber', tag: 'Peat & Molten Gold', style: 'silk', mood: 'dark',
     heroes: ['G8L4D2', '9M3K7W', 'T5P2R8', 'C6V9N4'], hues: [[68, 88], [42, 64], [80, 94]], baseH: [46, 68], baseL: [0.102, 0.128], baseC: [0.018, 0.030], cScale: 1.08, poleLift: 0.22, fold: [0.40, 0.54], stretchX: [1.62, 2.02] },
-  { id: 'achill-dusk', name: 'Achill Dusk', tag: 'Heather & Sea-Glass', style: 'silk', mood: 'split',
+  { id: 'achill-dusk', group: 'coast', name: 'Achill Dusk', tag: 'Heather & Sea-Glass', style: 'silk', mood: 'split',
     heroes: ['P7R3S9', '4K8V2M', 'Z6N3W7', 'J2F9Q5'], hues: [[222, 268], [318, 358], [48, 82]], baseH: [252, 286], cScale: 1.26, warpScale: [1.14, 1.62], fold: [0.40, 0.55], grain: [0.0190, 0.0208], chromaPreserve: [0.58, 0.70] },
-  { id: 'dingle-horizon', name: 'Dingle Horizon', tag: 'Bay & Sunset Tangerine', style: 'sphere', mood: 'split',
+  { id: 'dingle-horizon', group: 'coast', name: 'Dingle Horizon', tag: 'Bay & Sunset Tangerine', style: 'sphere', mood: 'split',
     heroes: ['F4L8G2', 'R7K3M9', '2W6P8C', 'N5V9T4'], hues: [[218, 256], [24, 54], [282, 326]], baseH: [228, 268], cScale: 1.18, chromaPreserve: [0.54, 0.68] },
-  { id: 'connemara-lough', name: 'Connemara Lough', tag: 'Jade & Teal Cusps', style: 'caustic', mood: 'dark',
+  { id: 'connemara-lough', group: 'coast', name: 'Connemara Lough', tag: 'Jade & Teal Cusps', style: 'caustic', mood: 'dark',
     heroes: ['B6C3K8', 'A9M4R2', '5T8W3P', 'L2N7Q6'], hues: [[164, 192], [196, 224], [254, 286]], baseH: [184, 212], baseL: [0.105, 0.132], baseC: [0.022, 0.036], cScale: 1.16, chromaPreserve: [0.50, 0.66] },
+
+  { id: 'dawn-meadow', group: 'emerald', name: 'Dawn Meadow', tag: 'Dew & First Light', style: 'mesh', mood: 'light',
+    heroes: ['M3D7W2', 'F9K4L8', 'A2P6R5', 'D8T3N9'], hues: [[128, 146], [82, 96], [205, 225]], baseH: [96, 112], cScale: 0.72, grain: [0.0225, 0.0250], scatter: [0.100, 0.150] },
+  { id: 'moss-stone', group: 'emerald', name: 'Moss & Stone', tag: 'Lichen on Granite', style: 'mesh', mood: 'split',
+    heroes: ['S4M8K2', 'L7G3P9', 'R2W6D4', 'N9C5T3'], hues: [[125, 145], [86, 100], [225, 250]], baseH: [220, 245], cScale: 0.74, chromaPreserve: [0.40, 0.58], grain: [0.0230, 0.0258] },
+  { id: 'peat-bog', group: 'emerald', name: 'Peat Bog', tag: 'Turf & Bog Cotton', style: 'silk', mood: 'dark',
+    heroes: ['P3B8G6', 'T6K2W9', 'C5R4M7', '9D2L8N'], hues: [[38, 58], [118, 136], [72, 88]], baseH: [42, 60], baseL: [0.098, 0.124], baseC: [0.016, 0.028], cScale: 0.92, poleLift: 0.08, fold: [0.36, 0.50], chromaPreserve: [0.44, 0.60] },
+  { id: 'gorse-hedgerow', group: 'emerald', name: 'Gorse Hedgerow', tag: 'Furze & Hawthorn', style: 'sphere', mood: 'split',
+    heroes: ['G6H2R9', 'W3F8K5', 'Q7M4D2', 'B9T6P3'], hues: [[90, 102], [130, 150], [18, 34]], baseH: [112, 128], cScale: 1.12, chromaPreserve: [0.52, 0.66] },
+  { id: 'moher-slate', group: 'emerald', name: 'Moher Slate', tag: 'Cliff & Atlantic Foam', style: 'sphere', mood: 'split',
+    heroes: ['M8S3C7', 'K2F9W4', 'H5R6N2', 'T3D8L9'], hues: [[218, 242], [182, 204], [70, 88]], baseH: [222, 244], cScale: 0.88, chromaPreserve: [0.46, 0.62], vignette: [0.010, 0.050] },
+  { id: 'glen-shade', group: 'emerald', name: 'Glen Shade', tag: 'Fern & Rain', style: 'caustic', mood: 'dark',
+    heroes: ['F2G7S9', 'R8N3K6', 'W4D2M8', 'L6P9C3'], hues: [[138, 162], [172, 196], [108, 124]], baseH: [150, 172], baseL: [0.100, 0.126], baseC: [0.020, 0.034], cScale: 1.02, chromaPreserve: [0.48, 0.64] },
+  { id: 'oak-canopy', group: 'emerald', name: 'Oak Canopy', tag: 'Bark & Sunlit Leaf', style: 'silk', mood: 'dark',
+    heroes: ['K7O2B9', 'C3L8W5', 'N6R4G2', 'D9M7T4'], hues: [[48, 66], [118, 140], [100, 116]], baseH: [52, 70], baseL: [0.096, 0.122], baseC: [0.014, 0.026], cScale: 1.04, poleLift: 0.12, fold: [0.38, 0.52], chromaPreserve: [0.46, 0.62] },
 ];
 export const ATLASES = COLLECTIONS;
+export const ATLAS_GROUPS = [
+  { id: 'coast', name: 'Coast & Sky' },
+  { id: 'emerald', name: 'Emerald Isle' },
+];
+
+// Local time of day as a sun path: x sweeps east (0) to west (1), elev peaks at solar noon.
+export function solarPhase(date = new Date(), hourOverride = null) {
+  const h = Number.isFinite(hourOverride)
+    ? ((hourOverride % 24) + 24) % 24
+    : date.getHours() + date.getMinutes() / 60;
+  const t = (h - 6) / 12;
+  const day = t >= 0 && t <= 1;
+  const nt = (((h + 6) % 24) / 12) % 1;
+  return {
+    hour: h,
+    x: day ? t : nt,
+    elev: day ? Math.sin(t * Math.PI) : -Math.sin(nt * Math.PI) * 0.6,
+    warmth: day ? 1 - Math.abs(2 * t - 1) : 0,
+    isNight: !day,
+  };
+}
 
 export function randomSeed() {
   const bytes = new Uint8Array(6);
@@ -1069,6 +1105,8 @@ export function generateScene({
   colors = null,
   colorScheme = null,
   lockGeometrySeed = true,
+  solar = false,
+  solarHour = null,
 } = {}) {
   const normalizedSeed = typeof seed === 'string' && seed.trim().length > 0 ? seed.trim().toUpperCase() : randomSeed();
   const rng = createRng(normalizedSeed);
@@ -1206,6 +1244,22 @@ export function generateScene({
 
   const bloomLabRaw = clampToGamutOklab(rawBloom[0], rawBloom[1], rawBloom[2]);
   const bloomLab = [round6(bloomLabRaw[0]), round6(bloomLabRaw[1]), round6(bloomLabRaw[2])];
+
+  const sun = solar && activeCol?.topology !== 'eclipse' ? solarPhase(new Date(), solarHour) : null;
+  if (sun) {
+    const warmHue = sun.isNight ? 232 : 48 + sun.elev * 22;
+    const warmAmt = sun.isNight ? 0.35 : 0.22 + sun.warmth * 0.45;
+    const [bL, bC, bH] = oklabToOklchTuple(bloomLab);
+    const mixedH = bH + Math.atan2(Math.sin((warmHue - bH) * DEG_TO_RAD), Math.cos((warmHue - bH) * DEG_TO_RAD)) / DEG_TO_RAD * warmAmt;
+    const tinted = clampToGamutOklab(
+      clamp(bL + (sun.isNight ? -0.06 : sun.elev * 0.03), 0.15, 0.992),
+      Math.max(0.01, bC * (1 + warmAmt * 0.5)),
+      wrapHue(mixedH),
+    );
+    bloomLab[0] = round6(tinted[0]);
+    bloomLab[1] = round6(tinted[1]);
+    bloomLab[2] = round6(tinted[2]);
+  }
   const bloomHex = oklabToSrgbHex(bloomLab[0], bloomLab[1], bloomLab[2]);
 
   const bridgeRad = bridgeHue * DEG_TO_RAD;
@@ -1225,12 +1279,18 @@ export function generateScene({
 
   const elevRng = createRng(`${normalizedSeed}:elev:${resolvedMood}`);
   const solarShift = activeCol?.topology === 'eclipse' ? [0, 0] : resolvedMood === 'light' ? [-0.025, -0.065] : resolvedMood === 'dark' ? [0.035, 0.075] : [0.010, 0.005];
-  const bloomPos = [
-    round6(clamp(choreography.baseBloomPos[0] + solarShift[0], 0.06, 0.94)),
-    round6(clamp(choreography.baseBloomPos[1] + solarShift[1], 0.06, 0.94)),
-  ];
-  const bloomStrength =
-    activeCol?.topology === 'eclipse'
+  const bloomPos = sun
+    ? [
+        round6(0.18 + sun.x * 0.64),
+        round6(sun.isNight ? 0.58 + Math.abs(sun.elev) * 0.1 : 0.62 - sun.elev * 0.48),
+      ]
+    : [
+        round6(clamp(choreography.baseBloomPos[0] + solarShift[0], 0.06, 0.94)),
+        round6(clamp(choreography.baseBloomPos[1] + solarShift[1], 0.06, 0.94)),
+      ];
+  const bloomStrength = sun
+    ? round6(sun.isNight ? 0.22 + Math.abs(sun.elev) * 0.1 : 0.30 + sun.elev * 0.42)
+    : activeCol?.topology === 'eclipse'
       ? round6(resolvedMood === 'dark' ? elevRng.range(0.54, 0.76) : elevRng.range(0.45, 0.68))
       : round6(resolvedMood === 'dark' ? elevRng.range(0.18, 0.36) : elevRng.range(0.32, 0.72));
 
@@ -1271,6 +1331,8 @@ export function generateScene({
     style: resolvedStyle,
     mood: resolvedMood,
     collection: activeCol ? activeCol.id : null,
+    atlas: activeCol ? activeCol.id : null,
+    solar: sun ? { hour: round6(sun.hour), x: round6(sun.x), elev: round6(sun.elev), isNight: sun.isNight } : null,
     archetypeId,
     archetypeName,
     isDark: uiTokens.theme === 'dark',

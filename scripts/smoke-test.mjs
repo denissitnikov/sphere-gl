@@ -118,8 +118,11 @@ for (let i = 0; i < 200; i++) {
 }
 
 // 6. Test all 8 Procedural COLLECTIONS (heroes + random seeds) & WCAG contrast
-if (!Array.isArray(COLLECTIONS) || COLLECTIONS.length !== 8) {
-  throw new Error(`Expected 8 COLLECTIONS, got ${COLLECTIONS?.length}`);
+if (!Array.isArray(COLLECTIONS) || COLLECTIONS.length !== 15) {
+  throw new Error(`Expected 15 COLLECTIONS, got ${COLLECTIONS?.length}`);
+}
+if (COLLECTIONS.filter((c) => c.group === 'emerald').length !== 7) {
+  throw new Error('Expected 7 Emerald Isle atlases');
 }
 for (const col of COLLECTIONS) {
   for (const heroSeed of col.heroes) {
@@ -151,7 +154,7 @@ if (
 }
 
 // 8. Test exportSVG & exportCSS on SphereRenderer prototype
-const { SphereRenderer } = await import('../src/index.js');
+const { SphereRenderer, solarPhase } = await import('../src/index.js');
 const svgOut = SphereRenderer.prototype.exportSVG.call({ _lastScene: dayScene }, dayScene, {
   width: 1200,
   height: 630,
@@ -162,6 +165,42 @@ if (!svgOut.startsWith('<svg') || !svgOut.includes('radialGradient') || !cssOut.
   throw new Error('exportSVG or exportCSS output validation failed');
 }
 
+// 9. Solar clock: sun x sweeps east->west across the day; bloom follows; theme never flips
+let prevX = -1;
+for (let h = 6; h <= 18; h += 0.5) {
+  const p = solarPhase(new Date(), h);
+  if (p.x < prevX || p.isNight) throw new Error(`solarPhase not monotonic at ${h}`);
+  prevX = p.x;
+}
+const dawn = generateScene({ seed: 'SOLAS1', atlas: 'dawn-meadow', mood: 'light', solar: true, solarHour: 6.5 });
+const noon = generateScene({ seed: 'SOLAS1', atlas: 'dawn-meadow', mood: 'light', solar: true, solarHour: 12 });
+const dusk = generateScene({ seed: 'SOLAS1', atlas: 'dawn-meadow', mood: 'light', solar: true, solarHour: 17.5 });
+if (!(dawn.bloomPos[0] < noon.bloomPos[0] && noon.bloomPos[0] < dusk.bloomPos[0])) {
+  throw new Error('Solar bloom did not move east->west');
+}
+if (!(noon.bloomPos[1] < dawn.bloomPos[1] && noon.bloomStrength > dawn.bloomStrength)) {
+  throw new Error('Solar noon should be higher and brighter than dawn');
+}
+if (dawn.isDark !== noon.isDark || JSON.stringify(dawn.poles[0].pos) !== JSON.stringify(noon.poles[0].pos)) {
+  throw new Error('Solar clock must not flip theme or move spheres');
+}
+for (const sc of [dawn, noon, dusk]) {
+  if (contrastRatio(sc.baseHex, sc.uiTokens.ink) < 4.5) throw new Error('Solar scene lost contrast');
+  count++;
+}
+
+// 10. Two-tier resolution budget: interactive frames stay under 1.6 MP on 3x phones
+const fakeCanvas = { clientWidth: 430, clientHeight: 932, width: 0, height: 0 };
+globalThis.window = { devicePixelRatio: 3 };
+const r = Object.create(SphereRenderer.prototype);
+Object.assign(r, { canvas: fakeCanvas, gl: null, maxDpr: 3, pixelBudget: 5.2e6, interactiveBudget: 1.6e6, _tier: 'static' });
+const st = r.resize('static');
+const it = r.resize('interactive');
+delete globalThis.window;
+if (st.dpr !== 3 || it.width * it.height > 1.6e6 * 1.02 || it.dpr >= st.dpr) {
+  throw new Error(`Resolution tiers wrong: static ${st.dpr}x, interactive ${it.width}x${it.height}`);
+}
+
 console.log(
-  `sphere-gl-lab smoke test passed (${count} deterministic scenes, 8 procedural collections, 4 optical styles, PNG/WebP/JPG/SVG/CSS exports, Day/Night geometry lock, 100% OS dark/light schema alignment, and WCAG ink contrast >= 4.5:1 verified).`,
+  `sphere-gl-lab smoke test passed (${count} deterministic scenes, 15 Irish atlases, solar clock, 2-tier resolution, 4 optical styles, PNG/WebP/JPG/SVG/CSS exports, Day/Night geometry lock, 100% OS dark/light schema alignment, and WCAG ink contrast >= 4.5:1 verified).`,
 );

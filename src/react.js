@@ -25,8 +25,10 @@ export const SphereBackground = forwardRef(function SphereBackground(
     grain = 1.65,
     motion = false,
     lightFollow = true,
+    solar = false,
+    solarHour,
     transitionIn = true,
-    maxDpr = 2,
+    maxDpr = 3,
     onScene,
     onTiming,
     className,
@@ -81,6 +83,8 @@ export const SphereBackground = forwardRef(function SphereBackground(
       grain,
       motion,
       lightFollow,
+      solar,
+      solarHour,
       transitionIn,
       maxDpr,
       onScene,
@@ -106,6 +110,8 @@ export const SphereBackground = forwardRef(function SphereBackground(
       grain,
       motion,
       lightFollow,
+      solar,
+      solarHour,
     });
   }, [
     url,
@@ -119,6 +125,8 @@ export const SphereBackground = forwardRef(function SphereBackground(
     grain,
     motion,
     lightFollow,
+    solar,
+    solarHour,
   ]);
 
   return createElement(

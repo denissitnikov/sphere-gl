@@ -2,14 +2,14 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>sphere-gl · Fast WebGL2 Backgrounds &amp; 5K Wallpaper Generator</title>
-  <meta name="description" content="A 26 KB WebGL2 and OKLCH engine that draws a clean, non-muddy background on every visit in under 1 ms, matches OS light/dark mode, and sleeps at 0% GPU." />
+  <meta name="description" content="A 29 KB WebGL2 and OKLCH engine that draws a clean, non-muddy background on every visit in under 1 ms, matches OS light/dark mode, and sleeps at 0% GPU." />
 
   <meta property="og:type" content="website" />
   <meta property="og:url" content="https://denissitnikov.github.io/sphere-gl/" />
   <meta property="og:title" content="sphere-gl · WebGL2 Backgrounds &amp; 5K Wallpaper Generator" />
-  <meta property="og:description" content="26 KB gzip, zero dependencies, 0% idle GPU. Clean OKLCH color harmonies for HTML, CSS, React, Framer, and 5K wallpapers." />
+  <meta property="og:description" content="29 KB gzip, zero dependencies, 0% idle GPU. Clean OKLCH color harmonies for HTML, CSS, React, Framer, and 5K wallpapers." />
   <meta property="og:image" content="https://denissitnikov.github.io/sphere-gl/assets/og-card.jpg" />
   <meta name="twitter:card" content="summary_large_image" />
   <meta name="twitter:title" content="sphere-gl · WebGL2 &amp; OKLCH Background Engine" />
@@ -84,17 +84,17 @@
       inset: 0;
       width: 100vw;
       height: 100vh;
+      height: 100dvh;
       display: block;
       cursor: pointer;
       z-index: 0;
     }
 
-    /* Top Telemetry & Palette Bar */
     .top-bar {
       position: fixed;
-      top: 18px;
-      left: 18px;
-      right: 18px;
+      top: calc(18px + env(safe-area-inset-top, 0px));
+      left: calc(18px + env(safe-area-inset-left, 0px));
+      right: calc(18px + env(safe-area-inset-right, 0px));
       display: flex;
       align-items: center;
       justify-content: space-between;
@@ -465,7 +465,7 @@
     /* Bottom Floating Studio Dock — Balanced 2-Row Layout (Never Orphans "Hide") */
     .dock-wrap {
       position: fixed;
-      bottom: 18px;
+      bottom: calc(18px + env(safe-area-inset-bottom, 0px));
       left: 50%;
       transform: translateX(-50%);
       z-index: 30;
@@ -501,7 +501,7 @@
     /* Live Procedural Optical Atlases Drawer (0 Bytes Network Raster Assets) */
     .collections-drawer {
       position: fixed;
-      bottom: 116px;
+      bottom: calc(116px + env(safe-area-inset-bottom, 0px));
       left: 50%;
       transform: translateX(-50%) translateY(14px) scale(0.985);
       z-index: 29;
@@ -572,6 +572,37 @@
       color: #090d16;
       border-color: #ffffff;
       font-weight: 640;
+    }
+    .col-pill.group {
+      background: rgba(110, 231, 183, 0.10);
+      border-color: rgba(110, 231, 183, 0.28);
+      color: #a7f3d0;
+    }
+    .col-pill.group.active {
+      background: #6ee7b7;
+      border-color: #6ee7b7;
+      color: #05291c;
+    }
+
+    .solar-scrub {
+      display: none;
+      align-items: center;
+      gap: 8px;
+      pointer-events: auto;
+    }
+    body.solar-on .solar-scrub {
+      display: inline-flex;
+    }
+    .solar-scrub input[type="range"] {
+      width: 150px;
+      accent-color: #fbbf24;
+      cursor: ew-resize;
+    }
+    .solar-scrub .solar-time {
+      font-family: var(--font-mono);
+      font-size: 11.5px;
+      font-variant-numeric: tabular-nums;
+      min-width: 52px;
     }
 
     .col-grid {
@@ -964,15 +995,67 @@
       .hero-cards {
         display: none;
       }
+      .dock-wrap {
+        width: calc(100vw - 16px);
+        max-width: none;
+      }
       .dock {
         border-radius: 18px;
-        padding: 8px;
+        padding: 8px 0;
+        align-items: stretch;
       }
       .dock-row {
-        flex-wrap: wrap;
+        flex-wrap: nowrap;
+        justify-content: flex-start;
+        overflow-x: auto;
+        overscroll-behavior-x: contain;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: none;
+        padding: 0 10px;
+        scroll-snap-type: x proximity;
+      }
+      .dock-row::-webkit-scrollbar {
+        display: none;
+      }
+      .dock-row > * {
+        flex: 0 0 auto;
+        scroll-snap-align: start;
+      }
+      .solar-scrub input[type="range"] {
+        width: 110px;
       }
       .col-grid {
         grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+    }
+
+    @media (max-width: 480px) {
+      .top-bar {
+        gap: 6px;
+      }
+      .top-bar .glass-pill {
+        max-width: 100%;
+        padding: 7px 11px;
+        gap: 8px;
+        font-size: 12px;
+        white-space: nowrap;
+        overflow-x: auto;
+        scrollbar-width: none;
+      }
+      .top-bar .glass-pill::-webkit-scrollbar {
+        display: none;
+      }
+      .brand-title, .archetype-label {
+        white-space: nowrap;
+      }
+      .perf-readout {
+        font-size: 10.5px;
+      }
+      .icon-btn, .btn-embed-cta, .studio-select {
+        height: 38px;
+      }
+      .seg-btn {
+        padding: 8px 10px;
       }
     }
   </style>
@@ -1004,6 +1087,13 @@
         <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
       </button>
     </div>
+
+    <div class="glass-pill solar-scrub" title="Drag to preview any hour. The sun rises east, peaks at noon, sets west.">
+      <span>☀</span>
+      <input type="range" id="solar-range" min="0" max="24" step="0.25" value="12" aria-label="Hour of day" />
+      <span class="solar-time" id="solar-time">12:00</span>
+      <button class="top-link" id="solar-now-btn" title="Follow the real clock">Now</button>
+    </div>
   </header>
 
   <section class="website-preview" id="website-preview" aria-hidden="true">
@@ -1013,7 +1103,7 @@
     </div>
     <h1 class="hero-headline">A fresh background on every visit.</h1>
     <p class="hero-sub">
-      26 KB gzip, zero dependencies. Picks clean OKLCH colors, draws one sharp WebGL2 frame in under 1 ms, and sets your text and glass colors automatically.
+      29 KB gzip, zero dependencies. Picks clean OKLCH colors, draws one sharp WebGL2 frame in under 1 ms, and sets your text and glass colors automatically.
     </p>
     <div class="hero-actions">
       <button class="hero-cta primary" id="hero-gen-btn">New Palette (Space)</button>
@@ -1082,7 +1172,7 @@
         </button>
         <button class="icon-btn" id="next-btn" title="Next seed (→)" disabled aria-label="Next seed">→</button>
 
-        <button class="icon-btn" id="collections-btn" title="Browse 8 Optical Color Atlases (P)">
+        <button class="icon-btn" id="collections-btn" title="Browse 15 Irish Optical Atlases (P)">
           <span>✦ Atlases</span>
           <span class="kbd" style="background:rgba(255,255,255,0.14);color:#fff;">P</span>
         </button>
@@ -1115,7 +1205,8 @@
         </select>
 
         <button class="icon-btn" id="grain-btn" title="Cycle film grain intensity (G)">Grain: Editorial</button>
-        <button class="icon-btn active" id="whisper-btn" title="Solas Light: wake-on-move grazing studio keylight follows your cursor and sleeps at 0% idle when still (L)">Solas Light ✦</button>
+        <button class="icon-btn active" id="whisper-btn" title="Solas Light: a grazing keylight follows your cursor (or your phone's tilt) and sleeps at 0% idle when still (L)">Solas Light ✦</button>
+        <button class="icon-btn" id="solar-btn" title="Solar Clock: the light follows your real local time of day. Sunrise east, noon overhead, sunset west (S)">☀ Solar</button>
         <button class="icon-btn" id="motion-btn" title="Toggle continuous 60fps drift vs 0% static frame (M)">Static 0%</button>
 
         <span class="sep"></span>
@@ -1158,7 +1249,7 @@
   <div class="modal-backdrop" id="code-modal">
     <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
       <div class="modal-header">
-        <div class="modal-title" id="modal-title">Add sphere-gl to Your Site (26 KB gzip · MIT · Zero Deps)</div>
+        <div class="modal-title" id="modal-title">Add sphere-gl to Your Site (29 KB gzip · MIT · Zero Deps)</div>
         <button class="icon-btn" id="close-modal-btn">✕</button>
       </div>
       <p class="modal-desc">
@@ -1201,6 +1292,7 @@
         <div class="shortcut-row"><span>OS Wallpaper Frame</span><span class="shortcut-key">3</span></div>
         <div class="shortcut-row"><span>Optical Atlases Drawer</span><span class="shortcut-key">P</span></div>
         <div class="shortcut-row"><span>Toggle Solas Light</span><span class="shortcut-key">L</span></div>
+        <div class="shortcut-row"><span>Toggle Solar Clock</span><span class="shortcut-key">S</span></div>
         <div class="shortcut-row"><span>Cycle Film Grain</span><span class="shortcut-key">G</span></div>
         <div class="shortcut-row"><span>Toggle 60fps Drift</span><span class="shortcut-key">M</span></div>
         <div class="shortcut-row"><span>Download PNG</span><span class="shortcut-key">E</span></div>
@@ -1215,6 +1307,8 @@
       SphereRenderer,
       ARCHETYPES,
       COLLECTIONS,
+      ATLAS_GROUPS,
+      solarPhase,
       generateScene,
       randomSeed,
       parsePresetUrl,
@@ -1222,7 +1316,7 @@
       detectColorScheme,
     } from './src/index.js';
 
-    const VERSION = 'v1.3.0';
+    const VERSION = 'v1.4.0';
     const CDN_SCRIPT = `https://cdn.jsdelivr.net/gh/denissitnikov/sphere-gl@${VERSION}/dist/sphere-gl.min.js`;
     const CDN_ESM = `https://cdn.jsdelivr.net/gh/denissitnikov/sphere-gl@${VERSION}/dist/sphere-gl.esm.min.js`;
     const CDN_FRAMER = `https://cdn.jsdelivr.net/gh/denissitnikov/sphere-gl@${VERSION}/dist/sphere-gl.framer.js`;
@@ -1280,10 +1374,15 @@
     let moodFilter = 'system';
     let archetypeFilter = 'auto';
     let collectionFilter = null;
+    let groupFilter = null;
     let whisperEnabled = true;
+    let solarEnabled = false;
+    let solarHour = null;
+    let solarTimer = 0;
     let motionEnabled = false;
     let snippetMode = 'random';
     let snippetApi = 'html';
+    const visibleColsFor = (g) => COLLECTIONS.filter((c) => !g || c.group === g);
 
     const collectionsDrawer = document.getElementById('collections-drawer');
     const collectionsBtn = document.getElementById('collections-btn');
@@ -1341,7 +1440,8 @@
     }
 
     const renderer = new SphereRenderer(canvas, {
-      maxDpr: 2,
+      maxDpr: 3,
+      interactiveBudget: navigator.connection?.saveData ? 0.9e6 : 1.6e6,
       onTiming({ cpuMs, gpuMs, width, height, backend }) {
         const gpuText = formatMs(gpuMs);
         const cpuText = formatMs(cpuMs) || '0.10';
@@ -1372,12 +1472,22 @@
       }
       params.set('grain', String(grainScale));
       if (motionEnabled) params.set('motion', '1');
+      if (solarEnabled) params.set('solar', '1');
+      if (solarEnabled && Number.isFinite(solarHour)) params.set('hour', String(Math.round(solarHour * 100) / 100));
       window.history.replaceState(null, '', `#${params.toString()}`);
+    }
+
+    let themeMeta = document.querySelector('meta[name="theme-color"]');
+    if (!themeMeta) {
+      themeMeta = document.createElement('meta');
+      themeMeta.name = 'theme-color';
+      document.head.appendChild(themeMeta);
     }
 
     function applyAdaptiveTokensToBody(scene) {
       const t = scene.uiTokens;
       document.body.dataset.canvasTheme = t.theme;
+      themeMeta.content = scene.baseHex;
       document.body.style.setProperty('--sphere-base', scene.baseHex);
       document.body.style.setProperty('--sphere-bloom', scene.bloomHex);
       document.body.style.setProperty('--sphere-accent', t.accent);
@@ -1446,6 +1556,8 @@
         archetype: overrides.archetype ?? archetypeFilter,
         collection: activeCol,
         colors: overrides.colors ?? null,
+        solar: solarEnabled,
+        solarHour,
       });
 
       if (historyIndex < history.length - 1) {
@@ -1462,16 +1574,35 @@
     // Live Procedural Collections Drawer UI & Single-Context Thumbnail Baker
     function renderCollectionsDrawer() {
       collectionPillsEl.innerHTML = '';
+      const visibleCols = COLLECTIONS.filter((c) => !groupFilter || c.group === groupFilter);
+
+      for (const g of [{ id: null, name: 'All' }, ...ATLAS_GROUPS]) {
+        const pill = document.createElement('button');
+        pill.className = `col-pill group${groupFilter === g.id ? ' active' : ''}`;
+        pill.textContent = g.name;
+        pill.addEventListener('click', () => {
+          groupFilter = g.id;
+          if (collectionFilter && !visibleColsFor(g.id).some((c) => c.id === collectionFilter)) {
+            collectionFilter = null;
+          }
+          renderCollectionsDrawer();
+        });
+        collectionPillsEl.appendChild(pill);
+      }
+      const gap = document.createElement('span');
+      gap.className = 'sep';
+      collectionPillsEl.appendChild(gap);
+
       const allBtn = document.createElement('button');
       allBtn.className = `col-pill${!collectionFilter ? ' active' : ''}`;
-      allBtn.textContent = 'All 8 Atlases';
+      allBtn.textContent = `All ${visibleCols.length}`;
       allBtn.addEventListener('click', () => {
         collectionFilter = null;
         renderCollectionsDrawer();
       });
       collectionPillsEl.appendChild(allBtn);
 
-      for (const col of COLLECTIONS) {
+      for (const col of visibleCols) {
         const pill = document.createElement('button');
         pill.className = `col-pill${collectionFilter === col.id ? ' active' : ''}`;
         pill.textContent = col.name;
@@ -1498,14 +1629,15 @@
       const grainScale = GRAIN_PRESETS[grainIdx].scale;
 
       if (!collectionFilter) {
-        // Overview mode: 1 live procedural card per Collection (8 cards total)
-        for (const col of COLLECTIONS) {
+        for (const col of visibleCols) {
           const heroSeed = col.heroes[0];
           const previewScene = generateScene({
             seed: heroSeed,
             collection: col.id,
             style: col.style,
             mood: col.mood || moodFilter,
+            solar: solarEnabled,
+            solarHour,
           });
           baker.renderOnce(previewScene, { grainScale });
 
@@ -1619,6 +1751,12 @@
 
     function initFromUrlOrDefault() {
       const parsed = parsePresetUrl(window.location.href);
+      if (parsed.solar) {
+        solarEnabled = true;
+        solarHour = Number.isFinite(parsed.solarHour) ? parsed.solarHour : null;
+        syncSolarUi();
+        scheduleSolarTick();
+      }
       if (parsed.seed || parsed.style || parsed.colors || parsed.collection) {
         if (parsed.collection) {
           collectionFilter = parsed.collection;
@@ -1782,9 +1920,117 @@
       if (!whisperEnabled && currentScene) {
         renderer.wakePointer(0, 0, { strength: 0, grainScale: GRAIN_PRESETS[grainIdx].scale });
       }
+      if (whisperEnabled && isCoarsePointer) {
+        enableTiltLight().then((ok) => {
+          showToast(ok ? 'Solas Light: tilt your phone' : 'Solas Light needs motion access');
+        });
+        return;
+      }
       showToast(whisperEnabled ? 'Solas Light enabled (0% idle when mouse rests)' : 'Solas Light disabled');
     }
     whisperBtn.addEventListener('click', toggleWhisper);
+
+    // Tilt light for phones: same wake-and-sleep keylight, driven by device orientation.
+    const isCoarsePointer = window.matchMedia?.('(hover: none) and (pointer: coarse)')?.matches ?? false;
+    let tiltBase = null;
+    let tiltAttached = false;
+    function onTilt(e) {
+      if (!whisperEnabled || motionEnabled || !Number.isFinite(e.gamma) || !Number.isFinite(e.beta)) return;
+      if (!tiltBase) tiltBase = { g: e.gamma, b: e.beta };
+      const nx = Math.max(-1, Math.min(1, (e.gamma - tiltBase.g) / 28));
+      const ny = Math.max(-1, Math.min(1, (e.beta - tiltBase.b) / 28));
+      renderer.wakePointer(nx, ny, { strength: 1.0, grainScale: GRAIN_PRESETS[grainIdx].scale });
+    }
+    async function enableTiltLight() {
+      if (typeof DeviceOrientationEvent === 'undefined') return false;
+      if (typeof DeviceOrientationEvent.requestPermission === 'function') {
+        try {
+          if ((await DeviceOrientationEvent.requestPermission()) !== 'granted') return false;
+        } catch (_) {
+          return false;
+        }
+      }
+      if (!tiltAttached) {
+        tiltAttached = true;
+        window.addEventListener('deviceorientation', onTilt, { passive: true });
+      }
+      return true;
+    }
+    if (isCoarsePointer && typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission !== 'function') {
+      enableTiltLight();
+    }
+
+    // Solar Clock: re-render on 10 minute boundaries with setTimeout, never a RAF loop.
+    const solarBtn = document.getElementById('solar-btn');
+    const solarRange = document.getElementById('solar-range');
+    const solarTimeEl = document.getElementById('solar-time');
+    const solarNowBtn = document.getElementById('solar-now-btn');
+
+    function fmtHour(h) {
+      const hh = Math.floor(h) % 24;
+      const mm = Math.round((h - Math.floor(h)) * 60);
+      return `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`;
+    }
+    function syncSolarUi() {
+      document.body.classList.toggle('solar-on', solarEnabled);
+      solarBtn.classList.toggle('active', solarEnabled);
+      const live = !Number.isFinite(solarHour);
+      const h = live ? solarPhase().hour : solarHour;
+      solarRange.value = String(h);
+      solarTimeEl.textContent = `${fmtHour(h)}${live ? '' : ' ·'}`;
+      solarNowBtn.style.opacity = live ? '0.45' : '1';
+      solarBtn.textContent = solarEnabled ? `☀ ${fmtHour(h)}` : '☀ Solar';
+    }
+    function scheduleSolarTick() {
+      if (solarTimer) clearTimeout(solarTimer);
+      solarTimer = 0;
+      if (!solarEnabled || Number.isFinite(solarHour)) return;
+      const now = new Date();
+      const ms = (10 - (now.getMinutes() % 10)) * 60000 - now.getSeconds() * 1000 + 250;
+      solarTimer = setTimeout(() => {
+        solarTimer = 0;
+        if (currentScene && !document.hidden) {
+          pushNewScene({ seed: currentScene.seed, morph: true });
+          syncSolarUi();
+        }
+        scheduleSolarTick();
+      }, ms);
+    }
+    function setSolar(on, hour = solarHour) {
+      solarEnabled = on;
+      solarHour = on ? hour : null;
+      syncSolarUi();
+      scheduleSolarTick();
+      if (currentScene) pushNewScene({ seed: currentScene.seed, morph: true });
+    }
+    solarBtn.addEventListener('click', () => {
+      setSolar(!solarEnabled, null);
+      showToast(solarEnabled ? 'Solar Clock on: light follows your local time' : 'Solar Clock off');
+    });
+    let scrubRaf = 0;
+    solarRange.addEventListener('input', () => {
+      solarHour = Number(solarRange.value);
+      syncSolarUi();
+      if (scrubRaf) return;
+      scrubRaf = requestAnimationFrame(() => {
+        scrubRaf = 0;
+        if (currentScene) pushNewScene({ seed: currentScene.seed, morph: true });
+      });
+    });
+    solarNowBtn.addEventListener('click', () => setSolar(true, null));
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) {
+        renderer.stopMotion();
+        return;
+      }
+      if (!currentScene) return;
+      if (solarEnabled && !Number.isFinite(solarHour)) {
+        pushNewScene({ seed: currentScene.seed, morph: true });
+        syncSolarUi();
+      } else {
+        renderActiveScene();
+      }
+    });
 
     function toggleMotion() {
       motionEnabled = !motionEnabled;
@@ -2036,6 +2282,8 @@ export function Hero() {
         toggleCollectionsDrawer();
       } else if (e.key === 'l' || e.key === 'L') {
         toggleWhisper();
+      } else if (e.key === 's' || e.key === 'S') {
+        solarBtn.click();
       } else if (e.key === 'h' || e.key === 'H') {
         toggleUiHidden();
       } else if (e.key === 'm' || e.key === 'M') {

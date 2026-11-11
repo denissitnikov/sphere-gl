@@ -18,6 +18,7 @@ export default function SphereGL(props) {
     color4 = '#A855F7',
     grain = 1.65,
     lightFollow = true,
+    solar = false,
     motion = false,
     style: framerLayoutStyle,
   } = props;
@@ -47,6 +48,7 @@ export default function SphereGL(props) {
       colors: effectiveColors,
       grain,
       lightFollow,
+      solar,
       motion,
       transitionIn: false,
     });
@@ -69,6 +71,7 @@ export default function SphereGL(props) {
       colors: effectiveColors,
       grain,
       lightFollow,
+      solar,
       motion,
     });
   }, [
@@ -85,6 +88,7 @@ export default function SphereGL(props) {
     color4,
     grain,
     lightFollow,
+    solar,
     motion,
   ]);
 
@@ -141,7 +145,7 @@ addPropertyControls(SphereGL, {
     type: ControlType.Enum,
     title: 'Atlas',
     options: ['auto', ...COLLECTIONS.map((c) => c.id)],
-    optionTitles: ['All Harmonies', ...COLLECTIONS.map((c) => c.name)],
+    optionTitles: ['All Atlases', ...COLLECTIONS.map((c) => `${c.group === 'emerald' ? 'Emerald · ' : 'Coast · '}${c.name}`)],
     defaultValue: 'auto',
     hidden: (p) => p.sourceMode === 'url' || p.sourceMode === 'custom',
   },
@@ -194,6 +198,13 @@ addPropertyControls(SphereGL, {
     enabledTitle: 'Follow',
     disabledTitle: 'Off',
     defaultValue: true,
+  },
+  solar: {
+    type: ControlType.Boolean,
+    title: 'Solar Clock',
+    enabledTitle: 'Follow Time',
+    disabledTitle: 'Off',
+    defaultValue: false,
   },
   motion: {
     type: ControlType.Boolean,

@@ -1,6 +1,6 @@
 {
   "name": "sphere-gl",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "description": "Fast WebGL2 and OKLCH background and 5K wallpaper generator. Matches OS dark and light mode automatically with zero dependencies and 0% idle GPU.",
   "type": "module",
   "main": "./dist/sphere-gl.min.js",

@@ -5,8 +5,10 @@ import {
   ARCHETYPES,
   COLLECTIONS,
   ATLASES,
+  ATLAS_GROUPS,
   randomSeed,
   generateScene,
+  solarPhase,
   oklchToOklab,
   oklabToLinearSrgb,
   clampToGamutOklab,
@@ -26,8 +28,10 @@ export {
   ARCHETYPES,
   COLLECTIONS,
   ATLASES,
+  ATLAS_GROUPS,
   randomSeed,
   generateScene,
+  solarPhase,
   oklchToOklab,
   oklabToLinearSrgb,
   clampToGamutOklab,
@@ -133,6 +137,11 @@ export function parsePresetUrl(urlOrQuery) {
     const numL = Number(rawL);
     out.lightFollow = Number.isFinite(numL) && rawL.trim() !== '' ? numL : parseBool(rawL, true);
   }
+  if (merged.has('solar')) out.solar = parseBool(merged.get('solar'), true);
+  if (merged.has('hour')) {
+    const hr = Number(merged.get('hour'));
+    if (Number.isFinite(hr)) out.solarHour = hr;
+  }
   if (merged.has('colors')) {
     const list = merged
       .get('colors')
@@ -151,6 +160,8 @@ export function formatPresetUrl(
     motion = false,
     lockSeed = true,
     colors = null,
+    solar = false,
+    solarHour = null,
     baseUrl = 'https://denissitnikov.github.io/sphere-gl/',
   } = {},
 ) {
@@ -165,6 +176,8 @@ export function formatPresetUrl(
   }
   if (Number.isFinite(grain)) params.set('grain', String(grain));
   if (motion) params.set('motion', '1');
+  if (solar || scene?.solar) params.set('solar', '1');
+  if (Number.isFinite(solarHour)) params.set('hour', String(Math.round(solarHour * 100) / 100));
   if (Array.isArray(colors) && colors.length >= 2) {
     params.set('colors', colors.join(','));
   }
@@ -210,6 +223,9 @@ function readCssVariableConfig(el) {
     const g = Number(cssGrain);
     if (Number.isFinite(g)) out.grain = g;
   }
+
+  const cssSolar = cs.getPropertyValue('--sphere-solar').trim();
+  if (cssSolar) out.solar = parseBool(cssSolar, true);
 
   return out;
 }
@@ -291,13 +307,20 @@ export function mountSphereBackground(target, options = {}) {
     ),
     motion: parseBool(options.motion ?? urlCfg.motion ?? ds.sphereMotion, false),
     whisperStrength: resolveWhisperStrength(rawLightFollow),
+    solar:
+      el.hasAttribute?.('data-sphere-solar') && ds.sphereSolar === ''
+        ? true
+        : parseBool(options.solar ?? urlCfg.solar ?? ds.sphereSolar ?? cssCfg.solar, false),
+    solarHour: parseNum(options.solarHour ?? urlCfg.solarHour ?? ds.sphereHour, null),
     transitionIn: parseBool(
       options.transitionIn ??
         (el.hasAttribute?.('data-transition-in') ? true : ds.sphereTransitionIn),
       false,
     ),
-    maxDpr: parseNum(options.maxDpr ?? ds.sphereMaxDpr, 2),
+    maxDpr: parseNum(options.maxDpr ?? ds.sphereMaxDpr, 3),
   };
+
+  const saveData = typeof navigator !== 'undefined' && navigator.connection?.saveData === true;
 
   let canvas;
   if (isDirectCanvas) {
@@ -324,6 +347,9 @@ export function mountSphereBackground(target, options = {}) {
       pointerEvents: 'none',
       zIndex: '-1',
     });
+    if (isFullPage && typeof CSS !== 'undefined' && CSS.supports?.('height', '100dvh')) {
+      canvas.style.height = '100dvh';
+    }
     container.prepend(canvas);
   }
 
@@ -338,11 +364,26 @@ export function mountSphereBackground(target, options = {}) {
 
   const renderer = new SphereRenderer(canvas, {
     maxDpr: cfg.maxDpr,
+    interactiveBudget: saveData ? 0.9e6 : 1.6e6,
     onTiming: options.onTiming,
   });
 
   let currentScene = null;
   let revealed = false;
+  let themeMeta = null;
+
+  function syncThemeColor(hex) {
+    if (!isFullPage || typeof document === 'undefined') return;
+    if (!themeMeta) {
+      themeMeta = document.querySelector('meta[name="theme-color"]:not([media])');
+      if (!themeMeta) {
+        themeMeta = document.createElement('meta');
+        themeMeta.name = 'theme-color';
+        document.head.appendChild(themeMeta);
+      }
+    }
+    themeMeta.content = hex;
+  }
 
   function applyThemeAttributes(node, scene) {
     if (!node || !node.style) return;
@@ -372,6 +413,8 @@ export function mountSphereBackground(target, options = {}) {
       archetype: cfg.archetype,
       collection: cfg.collection,
       colors: cfg.colors,
+      solar: cfg.solar,
+      solarHour: cfg.solarHour,
     });
     currentScene.atlas = currentScene.collection;
 
@@ -380,6 +423,7 @@ export function mountSphereBackground(target, options = {}) {
     if (isFullPage) {
       applyThemeAttributes(document.documentElement, currentScene);
       document.documentElement.style.backgroundColor = currentScene.baseHex;
+      syncThemeColor(currentScene.baseHex);
     }
 
     renderer.resize();
@@ -489,10 +533,52 @@ export function mountSphereBackground(target, options = {}) {
   if (typeof window !== 'undefined') {
     if (isFullPage) {
       window.addEventListener('resize', scheduleResize, { passive: true });
+      window.visualViewport?.addEventListener('resize', scheduleResize, { passive: true });
     } else {
       window.addEventListener('scroll', invalidateRect, { passive: true });
     }
   }
+
+  let hiddenMotion = false;
+  const onVisibility = () => {
+    if (typeof document === 'undefined') return;
+    if (document.hidden) {
+      hiddenMotion = renderer.isAnimating;
+      renderer.stopMotion();
+      return;
+    }
+    if (!currentScene) return;
+    if (cfg.solar) {
+      applyScene(cfg.seed ?? currentScene.seed, { morph: !prefersReducedMotion, morphDuration: 900 });
+    } else if (hiddenMotion && cfg.motion && !prefersReducedMotion) {
+      renderer.startMotion(currentScene, { grainScale: cfg.grainScale });
+    } else {
+      renderer.resize('static');
+      renderer.renderOnce(currentScene, { grainScale: cfg.grainScale });
+    }
+    hiddenMotion = false;
+  };
+  if (typeof document !== 'undefined') {
+    document.addEventListener('visibilitychange', onVisibility);
+  }
+
+  // Solar clock: one re-render every 10 minutes, scheduled with setTimeout so idle stays at 0 RAF.
+  let solarTimer = 0;
+  const scheduleSolarTick = () => {
+    if (solarTimer) clearTimeout(solarTimer);
+    solarTimer = 0;
+    if (!cfg.solar || Number.isFinite(cfg.solarHour) || typeof setTimeout !== 'function') return;
+    const now = new Date();
+    const msToNext = (10 - (now.getMinutes() % 10)) * 60000 - now.getSeconds() * 1000 + 250;
+    solarTimer = setTimeout(() => {
+      solarTimer = 0;
+      if (currentScene && !(typeof document !== 'undefined' && document.hidden)) {
+        applyScene(cfg.seed ?? currentScene.seed, { morph: !prefersReducedMotion, morphDuration: 1400 });
+      }
+      scheduleSolarTick();
+    }, msToNext);
+  };
+  scheduleSolarTick();
 
   const onPointerMove = (e) => {
     if (e.pointerType === 'touch') return;
@@ -541,6 +627,43 @@ export function mountSphereBackground(target, options = {}) {
     }
   }
 
+  // Tilt light: on touch devices the phone's orientation drives the same wake-and-sleep keylight.
+  const coarsePointer =
+    typeof window !== 'undefined' && window.matchMedia?.('(hover: none) and (pointer: coarse)')?.matches;
+  let tiltBase = null;
+  const onTilt = (e) => {
+    if (cfg.whisperStrength <= 0 || prefersReducedMotion || renderer.isAnimating) return;
+    if (!Number.isFinite(e.gamma) || !Number.isFinite(e.beta)) return;
+    if (!tiltBase) tiltBase = { g: e.gamma, b: e.beta };
+    const nx = Math.max(-1, Math.min(1, (e.gamma - tiltBase.g) / 28));
+    const ny = Math.max(-1, Math.min(1, (e.beta - tiltBase.b) / 28));
+    renderer.wakePointer(nx, ny, { strength: cfg.whisperStrength, grainScale: cfg.grainScale });
+  };
+  let tiltAttached = false;
+  const attachTilt = () => {
+    if (tiltAttached || typeof window === 'undefined' || typeof DeviceOrientationEvent === 'undefined') return;
+    tiltAttached = true;
+    window.addEventListener('deviceorientation', onTilt, { passive: true });
+  };
+  const enableTilt = async () => {
+    if (typeof DeviceOrientationEvent === 'undefined') return false;
+    if (typeof DeviceOrientationEvent.requestPermission === 'function') {
+      try {
+        const state = await DeviceOrientationEvent.requestPermission();
+        if (state !== 'granted') return false;
+      } catch (_) {
+        return false;
+      }
+    }
+    attachTilt();
+    return true;
+  };
+  if (coarsePointer && options.interactivePointer !== false && cfg.whisperStrength > 0) {
+    if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission !== 'function') {
+      attachTilt();
+    }
+  }
+
   const instance = {
     canvas,
     renderer,
@@ -567,6 +690,9 @@ export function mountSphereBackground(target, options = {}) {
       if (next.lightFollow !== undefined) {
         cfg.whisperStrength = resolveWhisperStrength(next.lightFollow);
       }
+      if (next.solar !== undefined) cfg.solar = parseBool(next.solar, false);
+      if (next.solarHour !== undefined) cfg.solarHour = parseNum(next.solarHour, null);
+      scheduleSolarTick();
 
       const seedToUse = next.seed !== undefined ? next.seed : undefined;
       return applyScene(seedToUse, {
@@ -574,6 +700,7 @@ export function mountSphereBackground(target, options = {}) {
         morphDuration: next.morphDuration ?? 540,
       });
     },
+    enableTilt,
     refreshCssVariables() {
       const updatedCss = readCssVariableConfig(el);
       if (updatedCss.colors) cfg.colors = updatedCss.colors;
@@ -609,6 +736,7 @@ export function mountSphereBackground(target, options = {}) {
     },
     destroy() {
       if (resizeRaf) cancelAnimationFrame(resizeRaf);
+      if (solarTimer) clearTimeout(solarTimer);
       if (ro) ro.disconnect();
       if (themeObserver) themeObserver.disconnect();
       if (schemeMedia) {
@@ -619,12 +747,18 @@ export function mountSphereBackground(target, options = {}) {
         }
       }
       if (typeof window !== 'undefined') {
-        if (isFullPage) window.removeEventListener('resize', scheduleResize);
-        else window.removeEventListener('scroll', invalidateRect);
+        if (isFullPage) {
+          window.removeEventListener('resize', scheduleResize);
+          window.visualViewport?.removeEventListener('resize', scheduleResize);
+        } else {
+          window.removeEventListener('scroll', invalidateRect);
+        }
         window.removeEventListener('pointermove', onPointerMove);
+        if (tiltAttached) window.removeEventListener('deviceorientation', onTilt);
       }
       if (typeof document !== 'undefined') {
         document.removeEventListener('pointerleave', onPointerLeave);
+        document.removeEventListener('visibilitychange', onVisibility);
       }
       renderer.destroy();
       if (!isDirectCanvas) canvas.remove();
