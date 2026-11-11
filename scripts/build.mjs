@@ -14,13 +14,8 @@ const pkg = JSON.parse(fs.readFileSync(path.join(rootDir, 'package.json'), 'utf8
 const banner = `/*! sphere-gl v${pkg.version} | MIT License | (c) 2026 Denis S. | https://github.com/denissitnikov/sphere-gl */`;
 
 function findEsbuild() {
-  const candidates = [
-    path.join(rootDir, 'node_modules', '.bin', 'esbuild'),
-    path.resolve(rootDir, '..', '..', 'raycast-extension', 'node_modules', '.bin', 'esbuild'),
-  ];
-  for (const c of candidates) {
-    if (fs.existsSync(c)) return c;
-  }
+  const localBin = path.join(rootDir, 'node_modules', '.bin', 'esbuild');
+  if (fs.existsSync(localBin)) return localBin;
   return 'esbuild';
 }
 

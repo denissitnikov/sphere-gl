@@ -1,21 +1,28 @@
-name: CI & Bundle Budget
+name: CI
 
 on:
   push:
     branches: [main]
   pull_request:
 
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
-  verify:
+  check:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Install esbuild for bundle verification
-        run: npm install --no-save esbuild
-      - name: Build bundles & enforce gzip budget
+      - name: Install dev dependencies
+        run: npm install --no-audit --no-fund
+      - name: Build bundles and check gzip budget
         run: npm run build
-      - name: Run determinism & WCAG contrast suite
+      - name: Run determinism and contrast suite
         run: npm test

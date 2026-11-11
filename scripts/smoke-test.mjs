@@ -117,7 +117,7 @@ for (let i = 0; i < 200; i++) {
   count += 2;
 }
 
-// 6. Test all 8 Procedural COLLECTIONS (heroes + random seeds) & WCAG contrast
+// 6. Test all 15 Procedural COLLECTIONS (heroes + random seeds) & WCAG contrast
 if (!Array.isArray(COLLECTIONS) || COLLECTIONS.length !== 15) {
   throw new Error(`Expected 15 COLLECTIONS, got ${COLLECTIONS?.length}`);
 }
@@ -202,5 +202,5 @@ if (st.dpr !== 3 || it.width * it.height > 1.6e6 * 1.02 || it.dpr >= st.dpr) {
 }
 
 console.log(
-  `sphere-gl-lab smoke test passed (${count} deterministic scenes, 15 Irish atlases, solar clock, 2-tier resolution, 4 optical styles, PNG/WebP/JPG/SVG/CSS exports, Day/Night geometry lock, 100% OS dark/light schema alignment, and WCAG ink contrast >= 4.5:1 verified).`,
+  `sphere-gl smoke test passed (${count} deterministic scenes, 15 Irish atlases, solar clock, 2-tier resolution, 4 optical styles, PNG/WebP/JPG/SVG/CSS exports, Day/Night geometry lock, 100% OS dark/light schema alignment, and WCAG ink contrast >= 4.5:1 verified).`,
 );

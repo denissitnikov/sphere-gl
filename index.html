@@ -1271,7 +1271,7 @@
       </div>
       <pre class="code-box" id="snippet-code"></pre>
       <div class="modal-footer">
-        <a class="top-link" href="https://github.com/denissitnikov/sphere-gl" target="_blank" rel="noopener">Full docs, npm &amp; CSP self-hosting guide on GitHub →</a>
+        <a class="top-link" href="https://github.com/denissitnikov/sphere-gl" target="_blank" rel="noopener">Full docs, npm, and CSP self-hosting guide on GitHub</a>
         <button class="btn-generate" id="copy-snippet-btn">Copy Code</button>
       </div>
     </div>
@@ -1316,7 +1316,7 @@
       detectColorScheme,
     } from './src/index.js';
 
-    const VERSION = 'v1.4.0';
+    const VERSION = 'v1.4.1';
     const CDN_SCRIPT = `https://cdn.jsdelivr.net/gh/denissitnikov/sphere-gl@${VERSION}/dist/sphere-gl.min.js`;
     const CDN_ESM = `https://cdn.jsdelivr.net/gh/denissitnikov/sphere-gl@${VERSION}/dist/sphere-gl.esm.min.js`;
     const CDN_FRAMER = `https://cdn.jsdelivr.net/gh/denissitnikov/sphere-gl@${VERSION}/dist/sphere-gl.framer.js`;
@@ -2114,7 +2114,7 @@
         showToast(`Exported ${width}×${height} ${fmt.toUpperCase()} (${sizeKb} KB · ${elapsed} ms)`);
       } catch (err) {
         console.error(err);
-        showToast('Export failed — see console');
+        showToast('Export failed (see console)');
       } finally {
         exportBtn.textContent = origText;
         exportBtn.disabled = false;
@@ -2182,7 +2182,8 @@ ${customVars}  --sphere-style: ${st};
             : snippetMode === 'custom'
               ? `mode="${st}"\n      colors={${JSON.stringify(sw.slice(0, 4))}}\n      grain={${grainScale}}`
               : `mode="${st}"\n      mood="${md}"${atlasLine}\n      grain={${grainScale}}`;
-        snippetCode.textContent = `import { SphereBackground } from 'sphere-gl/react';
+        snippetCode.textContent = `// npm install sphere-gl
+import { SphereBackground } from 'sphere-gl/react';
 
 export function Hero() {
   return (

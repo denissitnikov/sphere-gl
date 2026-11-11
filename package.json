@@ -1,7 +1,7 @@
 {
   "name": "sphere-gl",
-  "version": "1.4.0",
-  "description": "Fast WebGL2 and OKLCH background and 5K wallpaper generator. Matches OS dark and light mode automatically with zero dependencies and 0% idle GPU.",
+  "version": "1.4.1",
+  "description": "WebGL2 and OKLCH background and 5K wallpaper generator. Zero runtime dependencies, 0% idle GPU.",
   "type": "module",
   "main": "./dist/sphere-gl.min.js",
   "module": "./dist/sphere-gl.esm.min.js",
@@ -20,6 +20,9 @@
     },
     "./src/*": "./src/*"
   },
+  "engines": {
+    "node": ">=18.0.0"
+  },
   "peerDependencies": {
     "react": ">=17.0.0"
   },
@@ -27,6 +30,9 @@
     "react": {
       "optional": true
     }
+  },
+  "devDependencies": {
+    "esbuild": "^0.27.0"
   },
   "sideEffects": [
     "./dist/sphere-gl.min.js",
@@ -52,6 +58,7 @@
     "oklab",
     "background",
     "wallpaper",
+    "solar-clock",
     "framer",
     "react",
     "procedural",
@@ -62,6 +69,9 @@
   "repository": {
     "type": "git",
     "url": "git+https://github.com/denissitnikov/sphere-gl.git"
+  },
+  "bugs": {
+    "url": "https://github.com/denissitnikov/sphere-gl/issues"
   },
   "homepage": "https://denissitnikov.github.io/sphere-gl/"
 }
