@@ -339,6 +339,7 @@ export class SphereRenderer {
       if (dead || !next) return;
       if (grainScale !== undefined) gs = grainScale;
       const g = grainScale ?? gs;
+      if (gl && !gl.isContextLost()) getProg(styleToIndex(next.style));
       if (!lastSc || duration <= 0 || !G.requestAnimationFrame) {
         morph = null; if (anim) mScene = next;
         self.render(next, { time: mTime, pointer: ptr, whisper: wh, grainScale: g });
@@ -377,7 +378,7 @@ export class SphereRenderer {
       const sc = styleToIndex(act.style), ent = getProg(sc);
       if (!ent.ok) {
         if (pExt && !opts.sync && G.requestAnimationFrame && !gl.getProgramParameter(ent.pr, pExt.COMPLETION_STATUS_KHR)) {
-          cRaf ||= raf(() => { cRaf = 0; if (!dead && lastSc) self.render(lastSc, { time: mTime, pointer: ptr, whisper: wh, grainScale: gs }); });
+          cRaf ||= raf(() => { cRaf = 0; if (!dead && !lRaf && lastSc) self.render(lastSc, { time: mTime, pointer: ptr, whisper: wh, grainScale: gs }); });
           return ret(0, gl.drawingBufferWidth || canvas.width, gl.drawingBufferHeight || canvas.height, true);
         }
         if (!linkProg(ent)) return ret();
