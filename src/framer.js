@@ -1,12 +1,13 @@
 import { createElement, useEffect, useRef } from 'react';
 import { addPropertyControls, ControlType } from 'framer';
-import { ARCHETYPES, COLLECTIONS, mountSphereBackground } from './index.js';
+import { ARCHETYPES, COLLECTIONS, mountSphereBackground, parsePresetUrl } from 'sphere-gl';
 
 export default function SphereGL(props) {
   const {
     sourceMode = 'generative',
     presetUrl = '',
     seed = '',
+    mode,
     shaderStyle = 'sphere',
     mood = 'system',
     collection = 'auto',
@@ -20,65 +21,79 @@ export default function SphereGL(props) {
     lightFollow = true,
     solar = false,
     motion = false,
+    gamut = 'auto',
+    focusRect,
     style: framerLayoutStyle,
   } = props;
 
   const containerRef = useRef(null);
   const instanceRef = useRef(null);
+  const isMountedRef = useRef(false);
 
   const effectiveUrl = sourceMode === 'url' ? presetUrl : '';
+  const effectiveMode = mode ?? shaderStyle;
   const effectiveSeed = sourceMode === 'locked' && seed ? seed : undefined;
   const effectiveColors =
-    sourceMode === 'custom' ? [color1, color2, color3, color4].filter(Boolean) : null;
+    sourceMode === 'custom' ? [color1, color2, color3, color4].filter(Boolean) : undefined;
   const rawCollection = collection !== 'auto' ? collection : atlas;
   const effectiveCollection =
     sourceMode === 'url' || sourceMode === 'custom' || !rawCollection || rawCollection === 'auto'
-      ? null
+      ? undefined
       : rawCollection;
 
-  useEffect(() => {
-    if (!containerRef.current) return undefined;
-    const inst = mountSphereBackground(containerRef.current, {
-      url: effectiveUrl,
+  const buildPayload = (isInitial = false) => {
+    if (sourceMode === 'url' && effectiveUrl) {
+      const parsed = parsePresetUrl(effectiveUrl);
+      const out = { url: effectiveUrl, gamut, focusRect };
+      if (!isInitial || parsed.grain === undefined) out.grain = grain;
+      if (!isInitial || parsed.lightFollow === undefined) out.lightFollow = lightFollow;
+      if (!isInitial || parsed.solar === undefined) out.solar = solar;
+      if (!isInitial || parsed.motion === undefined) out.motion = motion;
+      return out;
+    }
+
+    return {
       seed: effectiveSeed,
-      style: shaderStyle,
-      mood,
-      collection: effectiveCollection,
-      harmony,
+      mode: effectiveMode,
+      mood: sourceMode === 'custom' ? undefined : mood,
+      atlas: effectiveCollection,
+      harmony: sourceMode === 'custom' ? undefined : harmony,
       colors: effectiveColors,
       grain,
       lightFollow,
       solar,
       motion,
+      gamut,
+      focusRect,
+    };
+  };
+
+  useEffect(() => {
+    if (!containerRef.current) return undefined;
+    const inst = mountSphereBackground(containerRef.current, {
+      ...buildPayload(true),
       transitionIn: false,
     });
     instanceRef.current = inst;
     return () => {
+      isMountedRef.current = false;
       inst.destroy();
       instanceRef.current = null;
     };
   }, []);
 
   useEffect(() => {
+    if (!isMountedRef.current) {
+      isMountedRef.current = true;
+      return;
+    }
     if (!instanceRef.current) return;
-    instanceRef.current.regenerate({
-      url: effectiveUrl,
-      seed: effectiveSeed,
-      style: shaderStyle,
-      mood,
-      collection: effectiveCollection,
-      harmony,
-      colors: effectiveColors,
-      grain,
-      lightFollow,
-      solar,
-      motion,
-    });
+    instanceRef.current.regenerate(buildPayload(false));
   }, [
     sourceMode,
     effectiveUrl,
     effectiveSeed,
-    shaderStyle,
+    effectiveMode,
     mood,
     effectiveCollection,
     harmony,
@@ -90,6 +105,7 @@ export default function SphereGL(props) {
     lightFollow,
     solar,
     motion,
+    gamut,
   ]);
 
   return createElement('div', {
@@ -128,8 +144,17 @@ addPropertyControls(SphereGL, {
   shaderStyle: {
     type: ControlType.Enum,
     title: 'Style',
-    options: ['sphere', 'mesh', 'silk', 'caustic', 'auto'],
-    optionTitles: ['Sphere (f/0.95)', 'Mesh (Watercolor)', 'Silk (Ribbon)', 'Caustic (Cusps)', 'Auto'],
+    options: ['sphere', 'mesh', 'silk', 'caustic', 'fluted', 'prism', 'topo', 'auto'],
+    optionTitles: [
+      'Sphere (f/0.95)',
+      'Mesh (Watercolor)',
+      'Silk (Ribbon)',
+      'Caustic (Cusps)',
+      'Fluted (Ribbed Glass)',
+      'Prism (Dispersion)',
+      'Topo (Isolines)',
+      'Auto',
+    ],
     defaultValue: 'sphere',
     hidden: (p) => p.sourceMode === 'url',
   },
@@ -145,7 +170,10 @@ addPropertyControls(SphereGL, {
     type: ControlType.Enum,
     title: 'Atlas',
     options: ['auto', ...COLLECTIONS.map((c) => c.id)],
-    optionTitles: ['All Atlases', ...COLLECTIONS.map((c) => `${c.group === 'emerald' ? 'Emerald · ' : 'Coast · '}${c.name}`)],
+    optionTitles: [
+      'All Atlases',
+      ...COLLECTIONS.map((c) => `${c.group === 'emerald' ? 'Emerald · ' : 'Coast · '}${c.name}`),
+    ],
     defaultValue: 'auto',
     hidden: (p) => p.sourceMode === 'url' || p.sourceMode === 'custom',
   },

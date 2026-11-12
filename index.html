@@ -1184,13 +1184,16 @@
 
         <span class="sep"></span>
 
-        <!-- Geometry Style (4 Studio Optical Topologies) -->
+        <!-- Geometry Style (7 Studio Optical Topologies) -->
         <div class="seg-group" role="group" aria-label="Geometry style" id="style-group">
           <button class="seg-btn" data-style="auto">Auto</button>
           <button class="seg-btn" data-style="mesh" title="Organic Watercolor Mesh">Mesh</button>
           <button class="seg-btn active" data-style="sphere" title="Diffused f/0.95 Macro Spheres">Sphere</button>
           <button class="seg-btn" data-style="silk" title="Sculpted Satin Ribbon Folds">Silk</button>
           <button class="seg-btn" data-style="caustic" title="Boreal & Water Caustic Light Cusps">Caustic</button>
+          <button class="seg-btn" data-style="fluted" title="Cylindrical Ribbed Glass Refraction">Fluted</button>
+          <button class="seg-btn" data-style="prism" title="Chromatic OKLab Dispersion">Prism</button>
+          <button class="seg-btn" data-style="topo" title="Anti-Aliased Topographic Isolines">Topo</button>
         </div>
 
         <!-- Palette Mood -->
@@ -1254,15 +1257,16 @@
   <div class="modal-backdrop" id="code-modal">
     <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
       <div class="modal-header">
-        <div class="modal-title" id="modal-title">Add sphere-gl to Your Site (29 KB gzip · MIT · Zero Deps)</div>
+        <div class="modal-title" id="modal-title">Add sphere-gl to Your Site (11.9 KB gzip core · MIT · Zero Deps)</div>
         <button class="icon-btn" id="close-modal-btn">✕</button>
       </div>
       <p class="modal-desc">
-        Draws a Retina WebGL2 background in <strong>~0.8 ms</strong> (<code>0%</code> idle GPU), matches OS light/dark mode, and sets <code>--sphere-ink</code> and <code>--sphere-glass</code> on your container so your text stays readable.
+        Draws a Retina Display-P3 / OKLab WebGL2 background in <strong>~0.8 ms</strong> (<code>0%</code> idle GPU), matches OS light/dark mode, and sets <code>--sphere-ink</code> and <code>--sphere-glass</code> on your container so your text stays readable.
       </p>
       <div class="modal-controls">
         <div class="seg-group" id="snippet-api-group">
           <button class="seg-btn active" data-api="html">2-Line HTML</button>
+          <button class="seg-btn" data-api="wc">&lt;sphere-gl&gt;</button>
           <button class="seg-btn" data-api="css">CSS Variables</button>
           <button class="seg-btn" data-api="react">React / Next.js</button>
           <button class="seg-btn" data-api="framer">Framer</button>
@@ -1321,11 +1325,13 @@
       formatPresetUrl,
       detectColorScheme,
     } from './src/index.js';
+    import { getCollectionHeroes } from './src/studio.js';
+    import { exportCSS } from './src/export.js';
 
-    const VERSION = 'v1.4.2';
+    const VERSION = 'v1.5.0';
     const CDN_SCRIPT = `https://cdn.jsdelivr.net/gh/denissitnikov/sphere-gl@${VERSION}/dist/sphere-gl.min.js`;
     const CDN_ESM = `https://cdn.jsdelivr.net/gh/denissitnikov/sphere-gl@${VERSION}/dist/sphere-gl.esm.min.js`;
-    const CDN_FRAMER = `https://cdn.jsdelivr.net/gh/denissitnikov/sphere-gl@${VERSION}/dist/sphere-gl.framer.js`;
+    const CDN_FRAMER = `https://esm.sh/sphere-gl@1.5.0/framer?external=react,framer`;
 
     const canvas = document.getElementById('sphere-canvas');
     const perfReadout = document.getElementById('perf-readout');
@@ -1673,7 +1679,7 @@
           syncMoodButtons();
           renderCollectionsDrawer();
           pushNewScene({
-            seed: col.heroes[0],
+            seed: getCollectionHeroes(col.id)[0],
             collection: col.id,
             style: col.style,
             mood: moodFilter,
@@ -1689,7 +1695,7 @@
 
       if (!collectionFilter) {
         for (const col of visibleCols) {
-          const heroSeed = col.heroes[0];
+          const heroSeed = getCollectionHeroes(col.id)[0];
           const previewScene = generateScene({
             seed: heroSeed,
             collection: col.id,
@@ -1741,7 +1747,7 @@
         // Active Collection mode: 4 Curated Heroes + 4 Fresh Infinite Seeds
         const col = COLLECTIONS.find((c) => c.id === collectionFilter) || COLLECTIONS[0];
         const seeds = [
-          ...col.heroes.slice(0, 4).map((s, i) => ({ seed: s, label: `Hero 0${i + 1}`, badge: `#${s}` })),
+          ...getCollectionHeroes(col.id).slice(0, 4).map((s, i) => ({ seed: s, label: `Hero 0${i + 1}`, badge: `#${s}` })),
           ...Array.from({ length: 4 }, (_, i) => {
             const s = randomSeed();
             return { seed: s, label: `Live Procedural 0${i + 1}`, badge: `#${s}` };
@@ -2226,9 +2232,9 @@
       if (!currentScene) return;
       const fmt = fmtSelect.value || 'png';
       if (fmt === 'css') {
-        const cssText = renderer.exportCSS(currentScene);
+        const cssText = exportCSS(currentScene);
         await navigator.clipboard?.writeText(cssText);
-        showToast(`Copied Pure CSS Radial Fallback for #${currentScene.seed}`);
+        showToast(`Copied OKLab + Display-P3 CSS for #${currentScene.seed}`);
         return;
       }
 
@@ -2299,13 +2305,32 @@
         snippetCode.textContent = `<body
   data-sphere-bg
   data-transition-in${seedAttr}${colorsAttr}${atlasAttr}
-  data-sphere-style="${st}"
+  data-sphere-mode="${st}"
   data-sphere-mood="${md}"${archAttr}
   data-sphere-grain="${grainScale}"${motionAttr}${lightAttr}${solarAttr}${hourAttr}
 >
   <h1 style="color: var(--sphere-ink)">Hello World</h1>
   <script src="${CDN_SCRIPT}" defer><\/script>
 </body>`;
+      } else if (snippetApi === 'wc') {
+        const seedAttr = snippetMode === 'locked' ? `\n  seed="${currentScene.seed}"` : '';
+        const colorsAttr = snippetMode === 'custom' ? `\n  colors="${sw.slice(0, 4).join(',')}"` : '';
+        const atlasAttr = snippetMode !== 'custom' && col ? `\n  atlas="${col}"` : '';
+        const archAttr = snippetMode !== 'custom' && !col && ar !== 'auto' ? `\n  harmony="${ar}"` : '';
+        const motionAttr = motionEnabled ? `\n  motion` : '';
+        const lightAttr = !whisperEnabled ? `\n  light-follow="false"` : '';
+        const solarAttr = solarEnabled ? `\n  solar` : '';
+        const hourAttr = solarEnabled && Number.isFinite(solarHour) ? `\n  hour="${Math.round(solarHour * 100) / 100}"` : '';
+        snippetCode.textContent = `<script src="${CDN_SCRIPT}" defer><\/script>
+
+<sphere-gl${seedAttr}${colorsAttr}${atlasAttr}
+  mode="${st}"
+  mood="${md}"${archAttr}
+  grain="${grainScale}"${motionAttr}${lightAttr}${solarAttr}${hourAttr}
+  style="min-height: 100dvh; display: grid; place-items: center; color: var(--sphere-ink);"
+>
+  <h1>Hello World</h1>
+</sphere-gl>`;
       } else if (snippetApi === 'css') {
         const customVars =
           snippetMode === 'custom'

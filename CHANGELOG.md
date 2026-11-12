@@ -1,5 +1,28 @@
 # Changelog
 
+## [1.5.0] - 2026-11-11
+
+### Added
+- Wide-gamut `Display-P3` WebGL2 rendering (`gamut: 'auto' | 'p3' | 'srgb'`, `gl.drawingBufferColorSpace = 'display-p3'`) with `OKLab`-to-linear-Display-P3 conversion and P3 soft-shoulder gamut compression.
+- Three optical shader modes powered by the `gradM` derivative field: `fluted` (cylindrical glass rib refraction and Fresnel highlights), `prism` (chromatic `OKLab` dispersion), and `topo` (1-pass anti-aliased contour isolines), expanding `STYLE_MODES` to 7 modes.
+- Native CSS Color 4 parser (`parseColorToOklab`) supporting `oklch()`, `oklab()`, `hsl()`, percentage `rgb()`, and `#hex` directly into floating-point `OKLab` without 8-bit quantization.
+- Zero-WebGL `getSphereTokensAndCss()` SSR helper, inline `in oklab` SSR style output in `SphereBackground` (`sphere-gl/react`), and instant CSS placeholder paint prior to first WebGL2 frame in `mountSphereBackground()`.
+- `<sphere-gl>` Custom Element (`registerSphereElement`, auto-registered in `sphere-gl.min.js`) with 13 reactive `observedAttributes`.
+- Strict TypeScript declaration files (`types/index.d.ts`, `types/react.d.ts`, `types/framer.d.ts`, `types/export.d.ts`, `types/fallback.d.ts`, `types/studio.d.ts`) with `"types"` first in every `package.json` export entry.
+- Semantic atlas aliases (`ocean`, `fintech`, `amber`, `gold`, `forest`, `sage`, `paper`, `editorial`, `slate`, `obsidian`, `sunset`, `coral`, and related intent names), `focusRect: [x0, y0, x1, y1]` pole attenuation over hero text regions, and `/llms.txt` integration guide.
+- `IntersectionObserver` (`rootMargin: '100px'`) viewport culling and `[-1.25, 1.25]` pointer bounds gating for non-full-page mounts.
+
+### Changed
+- Cut core `dist/sphere-gl.esm.min.js` to `11.97 KB` gzipped and `dist/sphere-gl.react.js` to `1.25 KB` gzipped by externalizing `sphere-gl` in React/Framer wrappers and splitting `sphere-gl/export`, `sphere-gl/fallback`, `sphere-gl/palettes`, and `sphere-gl/studio` into subpath modules.
+- Specialized fragment shaders per optical mode (`#define STYLE n`) with lazy compilation, `WebGLProgram` caching, async `KHR_parallel_shader_compile` polling, and CPU-hoisted per-pole math uploaded via packed `vec4` uniform arrays.
+- Enforced hard pixel ceilings (`width * height <= budget`) across `3x` mobile and `5K` viewports, added an 8-frame median GPU-timing DPR governor (`[0.5, 1.0]`), and rendered interactive frames into a persistent FBO blitted with `gl.LINEAR` so the canvas backbuffer never reallocates on pointer wake or settle.
+- Upgraded `exportCSS()` to emit `in oklab` elliptical radial gradients with `Display-P3` `@supports` blocks, proper bloom layer ordering, and an `sRGB` `@supports not` fallback; upgraded `exportImage()` to reuse the active WebGL2 context with tiled offscreen RGBA8 FBOs and `blob.degraded` / `strict` signaling.
+
+### Fixed
+- Fixed React (`SphereBackground`) and Framer (`SphereGL`) initial double-render on mount, prevented wrapper defaults from clobbering Studio `url` presets, and preserved `seed` when calling `regenerate()` without a new `seed`.
+- Fixed `computeUiTokens()` WCAG `>= 4.5:1` contrast verification across `split` mood and custom bright-base/dark-pole or dark-base/bright-pole palettes using a deterministic 3x3 analytical `OKLab` hero grid (`median` and worst quartile).
+- Fixed 8-bit dark-ramp banding when `grain === 0` by always applying an unconditional `+/-0.5 LSB` triangular dither after transfer-function encoding.
+
 ## [1.4.2] - 2026-11-11
 
 ### Fixed

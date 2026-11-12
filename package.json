@@ -1,23 +1,48 @@
 {
   "name": "sphere-gl",
-  "version": "1.4.2",
-  "description": "WebGL2 and OKLCH background and 5K wallpaper generator. Zero runtime dependencies, 0% idle GPU.",
+  "version": "1.5.0",
+  "description": "WebGL2 and OKLCH/Display-P3 background and 5K wallpaper engine. Zero runtime dependencies, 0% idle GPU.",
   "type": "module",
-  "main": "./dist/sphere-gl.min.js",
+  "main": "./dist/sphere-gl.esm.min.js",
   "module": "./dist/sphere-gl.esm.min.js",
+  "types": "./types/index.d.ts",
   "exports": {
     ".": {
+      "types": "./types/index.d.ts",
       "import": "./dist/sphere-gl.esm.min.js",
       "default": "./src/index.js"
     },
     "./react": {
+      "types": "./types/react.d.ts",
       "import": "./dist/sphere-gl.react.js",
       "default": "./src/react.js"
     },
     "./framer": {
+      "types": "./types/framer.d.ts",
       "import": "./dist/sphere-gl.framer.js",
       "default": "./src/framer.js"
     },
+    "./export": {
+      "types": "./types/export.d.ts",
+      "import": "./dist/sphere-gl.export.js",
+      "default": "./src/export.js"
+    },
+    "./fallback": {
+      "types": "./types/fallback.d.ts",
+      "import": "./dist/sphere-gl.fallback.js",
+      "default": "./src/fallback.js"
+    },
+    "./studio": {
+      "types": "./types/studio.d.ts",
+      "import": "./dist/sphere-gl.studio.js",
+      "default": "./src/studio.js"
+    },
+    "./palettes": {
+      "types": "./types/index.d.ts",
+      "import": "./dist/sphere-gl.palettes.js",
+      "default": "./src/palettes.js"
+    },
+    "./dist/*": "./dist/*",
     "./src/*": "./src/*"
   },
   "engines": {
@@ -41,6 +66,8 @@
   "files": [
     "dist",
     "src",
+    "types",
+    "llms.txt",
     "README.md",
     "LICENSE"
   ],
@@ -56,9 +83,11 @@
     "sphere-gradient",
     "oklch",
     "oklab",
+    "display-p3",
     "background",
     "wallpaper",
     "solar-clock",
+    "web-component",
     "framer",
     "react",
     "procedural",

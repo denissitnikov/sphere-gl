@@ -1,0 +1,21 @@
+export const COLLECTION_HEROES = {
+  'burren-chalk': ['7F3K9A', 'W4M9P2', 'H8T3C6', 'R2N7K5'],
+  'skellig-night': ['X9K2V7', '3M8Q4Z', 'N6F2R9', 'P4W8J3'],
+  'antrim-basalt': ['2B7K9M', 'Q5V8N2', 'K3D9F4', '8W2M6P'],
+  'boyne-solstice': ['E9C2L7', 'S4K8M3', '7R2W9P', 'D6F3Q8'],
+  'wicklow-amber': ['G8L4D2', '9M3K7W', 'T5P2R8', 'C6V9N4'],
+  'achill-dusk': ['P7R3S9', '4K8V2M', 'Z6N3W7', 'J2F9Q5'],
+  'dingle-horizon': ['F4L8G2', 'R7K3M9', '2W6P8C', 'N5V9T4'],
+  'connemara-lough': ['B6C3K8', 'A9M4R2', '5T8W3P', 'L2N7Q6'],
+  'dawn-meadow': ['M3D7W2', 'F9K4L8', 'A2P6R5', 'D8T3N9'],
+  'moss-stone': ['S4M8K2', 'L7G3P9', 'R2W6D4', 'N9C5T3'],
+  'peat-bog': ['P3B8G6', 'T6K2W9', 'C5R4M7', '9D2L8N'],
+  'gorse-hedgerow': ['G6H2R9', 'W3F8K5', 'Q7M4D2', 'B9T6P3'],
+  'moher-slate': ['M8S3C7', 'K2F9W4', 'H5R6N2', 'T3D8L9'],
+  'glen-shade': ['F2G7S9', 'R8N3K6', 'W4D2M8', 'L6P9C3'],
+  'oak-canopy': ['K7O2B9', 'C3L8W5', 'N6R4G2', 'D9M7T4'],
+};
+
+export function getCollectionHeroes(id) {
+  return COLLECTION_HEROES[id] || ['7F3K9A', 'W4M9P2', 'H8T3C6', 'R2N7K5'];
+}

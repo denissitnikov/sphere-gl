@@ -1,813 +1,346 @@
 import { SphereRenderer, AuraRenderer, STYLE_MAP, styleToIndex } from './shader.js';
 import {
-  STYLE_MODES,
-  MOOD_MODES,
-  ARCHETYPES,
-  COLLECTIONS,
-  ATLASES,
-  ATLAS_GROUPS,
-  randomSeed,
-  generateScene,
-  solarPhase,
-  oklchToOklab,
-  oklabToLinearSrgb,
-  clampToGamutOklab,
-  oklabToSrgbHex,
-  parseCssColorBytes,
-  srgbHexToOklab,
-  detectColorScheme,
+  STYLE_MODES, clamp, normalizeAtlasId, generateScene, detectColorScheme, buildInlineCssLayers, parsePresetUrl, _p,
 } from './palettes.js';
 
-export {
-  SphereRenderer,
-  AuraRenderer,
-  STYLE_MAP,
-  styleToIndex,
-  STYLE_MODES,
-  MOOD_MODES,
-  ARCHETYPES,
-  COLLECTIONS,
-  ATLASES,
-  ATLAS_GROUPS,
-  randomSeed,
-  generateScene,
-  solarPhase,
-  oklchToOklab,
-  oklabToLinearSrgb,
-  clampToGamutOklab,
-  oklabToSrgbHex,
-  parseCssColorBytes,
-  srgbHexToOklab,
-  detectColorScheme,
-};
+export * from './palettes.js';
+export { SphereRenderer, AuraRenderer, STYLE_MAP, styleToIndex };
 
-function parseBool(val, fallback = false) {
-  if (val === undefined || val === null || val === '') return fallback;
-  if (typeof val === 'boolean') return val;
-  const s = String(val).trim().toLowerCase();
-  if (s === 'true' || s === '1' || s === 'yes' || s === 'on') return true;
-  if (s === 'false' || s === '0' || s === 'no' || s === 'off') return false;
-  return fallback;
+const { pBool, pNum, pFocus, splitCols } = _p;
+const G = globalThis;
+const pWhisp = (v) => (typeof v === 'boolean' ? +v : v != null && String(v).trim() !== '' && Number.isFinite(+v) ? clamp(+v, 0, 1.5) : +pBool(v, true));
+const REGEN_KEYS = 'url,preset,seed,mode,style,mood,harmony,archetype,atlas,collection,colors,grain,grainScale,motion,lightFollow,solar,solarHour,gamut,focusRect'.split(',');
+const OBS = 'seed,mode,style,mood,atlas,harmony,grain,motion,light-follow,solar,hour,colors,preset'.split(',');
+const mAttr = (v) => { const s = typeof v === 'string' ? v.trim().toLowerCase() : ''; return !s || s.includes(':') ? undefined : s === 'auto' || STYLE_MODES.includes(s) ? s : undefined; };
+
+function readAttrs(el, bare) {
+  const d = (k) => el.getAttribute?.(`data-sphere-${k}`) ?? el.getAttribute?.(`data-${k}`);
+  const ga = (k) => (bare ? el.getAttribute?.(k) ?? (bare < 2 ? d(k) : null) : d(k));
+  const ha = (k) => (bare ? el.hasAttribute?.(k) || (bare < 2 && (el.hasAttribute?.(`data-sphere-${k}`) || el.hasAttribute?.(`data-${k}`))) : el.hasAttribute?.(`data-sphere-${k}`) || el.hasAttribute?.(`data-${k}`));
+  const o = { url: ga('preset') ?? ga('url') ?? undefined, solarHour: ga('hour') ?? undefined, focusRect: ga('focus') ?? undefined };
+  for (const k of 'seed,mode,style,mood,harmony,archetype,atlas,collection,grain,gamut'.split(',')) {
+    const v = ga(k);
+    if (v != null && (k !== 'style' || !bare || mAttr(v))) o[k] = v;
+  }
+  for (const [a, p] of [['motion', 'motion'], ['light-follow', 'lightFollow'], ['solar', 'solar']]) if (ha(a)) { const v = ga(a); o[p] = v === '' ? true : v; }
+  if (ga('colors')) o.colors = splitCols(ga('colors'));
+  return o;
 }
 
-function parseNum(val, fallback) {
-  if (val === undefined || val === null || val === '') return fallback;
-  const n = Number(val);
-  return Number.isFinite(n) ? n : fallback;
+function readCss(el) {
+  const cs = G.window?.getComputedStyle?.(el);
+  if (!cs) return {};
+  const pv = (n) => cs.getPropertyValue(`--sphere-${n}`).trim(), o = {}, cols = [];
+  for (let i = 1; i <= 6; i++) { const v = pv(`color-${i}`) || cs.getPropertyValue(`--gradient-color-${i}`).trim(); if (v) cols.push(v); }
+  if (cols.length > 1) o.colors = cols;
+  for (const [k, v] of [['style', pv('mode') || pv('style')], ['mood', pv('mood')], ['harmony', pv('harmony')], ['gamut', pv('gamut')], ['atlas', pv('atlas') || pv('collection')]]) if (v) o[k] = v;
+  if (pv('grain') && Number.isFinite(+pv('grain'))) o.grain = +pv('grain');
+  if (pv('solar')) o.solar = pBool(pv('solar'), true);
+  return o;
 }
 
-function normalizeAtlasId(raw) {
-  if (typeof raw !== 'string') return null;
-  const v = raw.trim().toLowerCase();
-  return v && v !== 'all' && v !== 'auto' && v !== 'none' ? v : null;
-}
-
-function resolveWhisperStrength(val) {
-  if (val === false || val === 'false' || val === '0' || val === 'off') return 0;
-  if (typeof val === 'number' && Number.isFinite(val)) return Math.max(0, Math.min(1.5, val));
-  if (typeof val === 'string' && val.trim() !== '') {
-    const n = Number(val);
-    if (Number.isFinite(n)) return Math.max(0, Math.min(1.5, n));
-  }
-  return parseBool(val, true) ? 1.0 : 0;
-}
-
-export function parsePresetUrl(urlOrQuery) {
-  if (typeof urlOrQuery !== 'string' || !urlOrQuery.trim()) return {};
-  const raw = urlOrQuery.trim();
-  const merged = new URLSearchParams();
-
-  const ingest = (part) => {
-    if (!part) return;
-    const clean = part.replace(/^[?#]+/, '');
-    if (!clean) return;
-    for (const [k, v] of new URLSearchParams(clean).entries()) {
-      merged.set(k, v);
-    }
-  };
-
-  try {
-    if (raw.includes('://')) {
-      const u = new URL(raw);
-      ingest(u.search);
-      ingest(u.hash);
-    } else {
-      const [beforeHash, afterHash] = raw.split('#');
-      if (beforeHash && (beforeHash.includes('=') || beforeHash.startsWith('?'))) {
-        ingest(beforeHash);
-      }
-      if (afterHash) ingest(afterHash);
-    }
-  } catch (_) {
-    ingest(raw);
-  }
-
-  const out = {};
-  if (merged.has('preview') || merged.has('view')) {
-    const p = (merged.get('preview') || merged.get('view') || '').trim().toLowerCase();
-    if (p === 'website' || p === 'wallpaper' || p === 'canvas') out.preview = p;
-  }
-  if (merged.has('seed')) {
-    const s = merged.get('seed').trim();
-    if (s && s !== 'auto' && s !== 'random') out.seed = s.toUpperCase();
-  }
-  if (merged.has('style')) out.style = merged.get('style').trim().toLowerCase();
-  if (merged.has('mood')) out.mood = merged.get('mood').trim().toLowerCase();
-  if (merged.has('harmony') || merged.has('arch') || merged.has('archetype')) {
-    out.harmony = (
-      merged.get('harmony') ||
-      merged.get('arch') ||
-      merged.get('archetype')
-    ).trim();
-  }
-  if (merged.has('atlas') || merged.has('collection') || merged.has('col')) {
-    const col = normalizeAtlasId(
-      merged.get('atlas') ?? merged.get('collection') ?? merged.get('col'),
-    );
-    if (col) {
-      out.atlas = col;
-      out.collection = col;
-    }
-  }
-  if (merged.has('grain')) {
-    const g = Number(merged.get('grain'));
-    if (Number.isFinite(g)) out.grain = g;
-  }
-  if (merged.has('motion')) {
-    out.motion = parseBool(merged.get('motion'), false);
-  }
-  if (merged.has('light') || merged.has('whisper') || merged.has('solas')) {
-    const rawL = String(merged.get('light') ?? merged.get('whisper') ?? merged.get('solas') ?? '').trim();
-    const lowL = rawL.toLowerCase();
-    if (lowL === '0' || lowL === 'false' || lowL === 'off' || lowL === 'no') {
-      out.lightFollow = false;
-    } else if (lowL === '1' || lowL === 'true' || lowL === 'on' || lowL === 'yes' || lowL === '') {
-      out.lightFollow = true;
-    } else {
-      const numL = Number(rawL);
-      out.lightFollow = Number.isFinite(numL) ? numL : true;
-    }
-  }
-  if (merged.has('solar')) out.solar = parseBool(merged.get('solar'), true);
-  if (merged.has('hour')) {
-    const hr = Number(merged.get('hour'));
-    if (Number.isFinite(hr)) {
-      out.solarHour = hr;
-      if (!merged.has('solar')) out.solar = true;
-    }
-  }
-  if (merged.has('colors')) {
-    const list = merged
-      .get('colors')
-      .split(',')
-      .map((c) => c.trim())
-      .filter(Boolean);
-    if (list.length >= 2) out.colors = list;
-  }
-  return out;
-}
-
-export function formatPresetUrl(
-  scene,
-  {
-    grain = 1.65,
-    motion = false,
-    lockSeed = true,
-    colors = null,
-    solar = false,
-    solarHour = null,
-    lightFollow = true,
-    preview = null,
-    baseUrl = 'https://denissitnikov.github.io/sphere-gl/',
-  } = {},
-) {
-  const params = new URLSearchParams();
-  if (preview && preview !== 'canvas') params.set('preview', preview);
-  const col = scene?.atlas || scene?.collection;
-  if (lockSeed && scene?.seed) params.set('seed', scene.seed);
-  if (col) params.set('col', col);
-  if (scene?.style) params.set('style', scene.style);
-  if (scene?.mood) params.set('mood', scene.mood);
-  if (scene?.archetypeId && scene.archetypeId !== 'custom-palette' && !col) {
-    params.set('arch', scene.archetypeId);
-  }
-  if (Number.isFinite(grain)) params.set('grain', String(grain));
-  if (motion) params.set('motion', '1');
-  if (lightFollow === false || lightFollow === 0) params.set('light', '0');
-  if (solar || scene?.solar) params.set('solar', '1');
-  if (Number.isFinite(solarHour)) params.set('hour', String(Math.round(solarHour * 100) / 100));
-  if (Array.isArray(colors) && colors.length >= 2) {
-    params.set('colors', colors.join(','));
-  }
-  return `${baseUrl}#${params.toString()}`;
-}
-
-function readCssVariableConfig(el) {
-  if (typeof window === 'undefined' || typeof window.getComputedStyle !== 'function' || !el) {
-    return {};
-  }
-  const cs = window.getComputedStyle(el);
-  const colors = [];
-  for (let i = 1; i <= 6; i++) {
-    const val =
-      cs.getPropertyValue(`--sphere-color-${i}`).trim() ||
-      cs.getPropertyValue(`--gradient-color-${i}`).trim();
-    if (val) colors.push(val);
-  }
-
-  const out = {};
-  if (colors.length >= 2) out.colors = colors;
-
-  const cssStyle = cs.getPropertyValue('--sphere-style').trim();
-  if (cssStyle) out.style = cssStyle;
-
-  const cssMood = cs.getPropertyValue('--sphere-mood').trim();
-  if (cssMood) out.mood = cssMood;
-
-  const cssHarmony = cs.getPropertyValue('--sphere-harmony').trim();
-  if (cssHarmony) out.harmony = cssHarmony;
-
-  const cssAtlas =
-    cs.getPropertyValue('--sphere-atlas').trim() ||
-    cs.getPropertyValue('--sphere-collection').trim();
-  if (cssAtlas) {
-    const col = normalizeAtlasId(cssAtlas);
-    out.atlas = col;
-    out.collection = col;
-  }
-
-  const cssGrain = cs.getPropertyValue('--sphere-grain').trim();
-  if (cssGrain !== '') {
-    const g = Number(cssGrain);
-    if (Number.isFinite(g)) out.grain = g;
-  }
-
-  const cssSolar = cs.getPropertyValue('--sphere-solar').trim();
-  if (cssSolar) out.solar = parseBool(cssSolar, true);
-
-  return out;
+function patchCfg(cfg, nx, renderer) {
+  if (!nx) return;
+  if (typeof nx.seed === 'string' && nx.seed.trim()) cfg.seed = nx.seed.trim().toUpperCase();
+  const nm = nx.mode ?? nx.style;
+  if (nm != null && nm !== '') cfg.style = nm;
+  if (nx.mood != null && nx.mood !== '') cfg.mood = nx.mood;
+  const nh = nx.harmony ?? nx.archetype;
+  if (nh != null && nh !== '') cfg.archetype = nh;
+  const na = nx.atlas !== undefined ? nx.atlas : nx.collection;
+  if (na !== undefined) cfg.collection = normalizeAtlasId(na);
+  if (nx.colors !== undefined) cfg.colors = nx.colors;
+  if (nx.grain != null || nx.grainScale != null) cfg.grainScale = pNum(nx.grainScale ?? nx.grain, 1);
+  if (nx.motion != null && nx.motion !== '') cfg.motion = pBool(nx.motion, false);
+  if (nx.lightFollow != null && nx.lightFollow !== '') cfg.whisperStrength = pWhisp(nx.lightFollow);
+  if (nx.solar != null && nx.solar !== '') cfg.solar = pBool(nx.solar, false);
+  if (nx.solarHour !== undefined) cfg.solarHour = pNum(nx.solarHour, null);
+  if (nx.gamut != null && nx.gamut !== '') { cfg.gamut = nx.gamut; renderer?.setGamut(nx.gamut); }
+  if ('focusRect' in nx && nx.focusRect !== undefined) cfg.focusRect = pFocus(nx.focusRect);
 }
 
 export function mountSphereBackground(target, options = {}) {
-  const el =
-    typeof target === 'string'
-      ? document.querySelector(target)
-      : target || document.body;
+  const W = G.window, D = G.document;
+  const el = typeof target === 'string' ? D?.querySelector(target) : target || D?.body;
+  if (!el) throw new Error(`target "${target}"?`);
+  if (el.__sphereInstance) return el.__sphereInstance;
 
-  if (!el) {
-    throw new Error(`mountSphereBackground: target "${target}" not found.`);
-  }
-
-  if (el.__sphereInstance) {
-    return el.__sphereInstance;
-  }
-
-  const ds = el.dataset || {};
-  const isDirectCanvas = el.tagName === 'CANVAS';
-  const container = isDirectCanvas ? el.parentElement || document.body : el;
-  const isFullPage =
-    !isDirectCanvas &&
-    (container === document.body || container === document.documentElement);
-
-  const presetUrl =
-    options.url ?? options.preset ?? ds.spherePreset ?? ds.sphereUrl ?? '';
-  const urlCfg = presetUrl ? parsePresetUrl(presetUrl) : {};
-  const cssCfg = readCssVariableConfig(el);
-
-  const attrColors = ds.sphereColors
-    ? ds.sphereColors
-        .split(',')
-        .map((s) => s.trim())
-        .filter(Boolean)
-    : undefined;
-
-  const rawLightFollow =
-    options.lightFollow ??
-    urlCfg.lightFollow ??
-    ds.sphereLightFollow ??
-    ds.lightFollow ??
-    true;
-
-  const rawAtlas =
-    options.atlas ??
-    options.collection ??
-    urlCfg.atlas ??
-    urlCfg.collection ??
-    ds.sphereAtlas ??
-    ds.sphereCollection ??
-    ds.atlas ??
-    ds.collection ??
-    cssCfg.atlas ??
-    cssCfg.collection ??
-    null;
+  const isDirect = el.tagName === 'CANVAS', container = isDirect ? el.parentElement || D?.body : el;
+  const isFull = !isDirect && (container === D?.body || container === D?.documentElement);
+  const ds = readAttrs(el, el.tagName?.includes('-'));
+  const pu = options.url ?? options.preset ?? ds.url ?? '';
+  const ga = (k) => el.getAttribute?.(`data-sphere-${k}`) ?? el.getAttribute?.(`data-${k}`);
 
   const cfg = {
-    seed: options.seed ?? urlCfg.seed ?? ds.sphereSeed ?? undefined,
-    style: options.style ?? urlCfg.style ?? ds.sphereStyle ?? cssCfg.style ?? 'auto',
-    mood: options.mood ?? urlCfg.mood ?? ds.sphereMood ?? cssCfg.mood ?? 'system',
-    archetype:
-      options.harmony ??
-      options.archetype ??
-      urlCfg.harmony ??
-      ds.sphereHarmony ??
-      ds.sphereArchetype ??
-      cssCfg.harmony ??
-      'auto',
-    collection: normalizeAtlasId(rawAtlas),
-    colors: options.colors ?? urlCfg.colors ?? attrColors ?? cssCfg.colors ?? null,
-    grainScale: parseNum(
-      options.grain ??
-        options.grainScale ??
-        urlCfg.grain ??
-        ds.sphereGrain ??
-        cssCfg.grain,
-      1.0,
-    ),
-    motion: parseBool(options.motion ?? urlCfg.motion ?? ds.sphereMotion, false),
-    whisperStrength: resolveWhisperStrength(rawLightFollow),
-    solar:
-      el.hasAttribute?.('data-sphere-solar') && ds.sphereSolar === ''
-        ? true
-        : parseBool(options.solar ?? urlCfg.solar ?? ds.sphereSolar ?? cssCfg.solar, false),
-    solarHour: parseNum(options.solarHour ?? urlCfg.solarHour ?? ds.sphereHour, null),
-    transitionIn: parseBool(
-      options.transitionIn ??
-        (el.hasAttribute?.('data-transition-in') ? true : ds.sphereTransitionIn),
-      false,
-    ),
-    maxDpr: parseNum(options.maxDpr ?? ds.sphereMaxDpr, 3),
+    seed: undefined, style: 'auto', mood: 'system', archetype: 'auto', collection: null, colors: null,
+    grainScale: 1, motion: false, whisperStrength: 1, solar: false, solarHour: null, gamut: 'auto', focusRect: null,
+    transitionIn: pBool(options.transitionIn ?? (el.hasAttribute?.('data-transition-in') ? true : ga('transition-in')), false),
+    maxDpr: pNum(options.maxDpr ?? ga('max-dpr'), 3),
   };
+  for (const src of [readCss(el), ds, pu ? parsePresetUrl(pu) : null, options]) patchCfg(cfg, src);
 
-  const saveData = typeof navigator !== 'undefined' && navigator.connection?.saveData === true;
+  const phNode = isFull ? D?.documentElement : !isDirect ? container : null;
+  const prevPhBg = phNode?.style ? phNode.style.backgroundImage : '';
 
-  let canvas;
-  if (isDirectCanvas) {
-    canvas = el;
-  } else {
-    if (isFullPage) {
-      document.body.style.isolation = 'isolate';
-      document.body.style.backgroundColor = 'transparent';
-    } else {
-      const computed = window.getComputedStyle(container);
-      if (computed.position === 'static') container.style.position = 'relative';
-      if (computed.isolation === 'auto') container.style.isolation = 'isolate';
+  let canvas = el;
+  if (!isDirect) {
+    if (isFull && D?.body) { D.body.style.isolation = 'isolate'; D.body.style.backgroundColor = 'transparent'; }
+    else {
+      const cs = W?.getComputedStyle?.(container);
+      if (cs?.position === 'static') container.style.position = 'relative';
+      if (cs?.isolation === 'auto') container.style.isolation = 'isolate';
     }
-
-    canvas = document.createElement('canvas');
+    canvas = D.createElement('canvas');
     canvas.className = 'sphere-gl-canvas';
     canvas.setAttribute('aria-hidden', 'true');
     Object.assign(canvas.style, {
-      position: isFullPage ? 'fixed' : 'absolute',
-      inset: '0',
-      width: isFullPage ? '100vw' : '100%',
-      height: isFullPage ? '100vh' : '100%',
-      display: 'block',
-      pointerEvents: 'none',
-      zIndex: '-1',
+      position: isFull ? 'fixed' : 'absolute', inset: '0', width: isFull ? '100vw' : '100%',
+      height: isFull && G.CSS?.supports?.('height', '100dvh') ? '100dvh' : isFull ? '100vh' : '100%',
+      display: 'block', pointerEvents: 'none', zIndex: '-1', opacity: '0',
     });
-    if (isFullPage && typeof CSS !== 'undefined' && CSS.supports?.('height', '100dvh')) {
-      canvas.style.height = '100dvh';
-    }
     container.prepend(canvas);
   }
 
-  const prefersReducedMotion =
-    typeof window !== 'undefined' &&
-    window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches;
+  const redM = !!W?.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches;
+  if (!isDirect && cfg.transitionIn && !redM) canvas.style.transition = 'opacity 320ms cubic-bezier(0.16, 1, 0.3, 1)';
 
-  if (cfg.transitionIn && !prefersReducedMotion) {
-    canvas.style.opacity = '0';
-    canvas.style.transition = 'opacity 320ms cubic-bezier(0.16, 1, 0.3, 1)';
-  }
-
+  let currentScene = null, revealed = false, themeMeta = null, inView = true, solarDirty = false;
+  const isSys = () => /^system$/i.test(String(cfg.mood || 'system').trim());
   const renderer = new SphereRenderer(canvas, {
-    maxDpr: cfg.maxDpr,
-    interactiveBudget: saveData ? 0.9e6 : 1.6e6,
-    onTiming: options.onTiming,
+    maxDpr: cfg.maxDpr, interactiveBudget: G.navigator?.connection?.saveData ? 0.9e6 : 1.6e6,
+    gamut: cfg.gamut, onTiming: options.onTiming,
+    onFirstFrame: () => {
+      if (revealed) return;
+      revealed = true;
+      if (!isDirect) {
+        if (cfg.transitionIn && !redM && G.requestAnimationFrame) requestAnimationFrame(() => { canvas.style.opacity = '1'; });
+        else canvas.style.opacity = '1';
+      }
+    },
   });
 
-  let currentScene = null;
-  let revealed = false;
-  let themeMeta = null;
+  const setTok = (n, s) => {
+    if (!n?.style) return;
+    n._sp = 1;
+    const t = s.uiTokens, col = s.collection || '';
+    for (const [k, v] of [['theme', t.theme], ['mood', s.mood], ['style', s.style], ['mode', s.style], ['seed', s.seed], ['collection', col], ['atlas', col]]) n.setAttribute?.(`data-sphere-${k}`, v);
+    for (const [k, v] of [['base', s.baseHex], ['bloom', s.bloomHex], ['accent', t.accent], ['ink', t.ink], ['ink-muted', t.inkMuted], ['glass', t.glass], ['glass-border', t.glassBorder]]) n.style.setProperty(`--sphere-${k}`, v);
+    n._sp = 0;
+  };
 
-  function syncThemeColor(hex) {
-    if (!isFullPage || typeof document === 'undefined') return;
-    if (!themeMeta) {
-      themeMeta = document.querySelector('meta[name="theme-color"]:not([media])');
-      if (!themeMeta) {
-        themeMeta = document.createElement('meta');
-        themeMeta.name = 'theme-color';
-        document.head.appendChild(themeMeta);
-      }
-    }
-    themeMeta.content = hex;
-  }
+  const syncRun = () => {
+    if (cfg.motion && !redM && !D?.hidden) renderer.startMotion(currentScene, { grainScale: cfg.grainScale });
+    else { renderer.resize('static'); renderer.renderOnce(currentScene, { grainScale: cfg.grainScale }); }
+  };
 
-  function applyThemeAttributes(node, scene) {
-    if (!node || !node.style) return;
-    const t = scene.uiTokens;
-    const col = scene.collection || '';
-    node.dataset.sphereTheme = t.theme;
-    node.dataset.sphereMood = scene.mood;
-    node.dataset.sphereStyle = scene.style;
-    node.dataset.sphereSeed = scene.seed;
-    node.dataset.sphereCollection = col;
-    node.dataset.sphereAtlas = col;
-    node.style.setProperty('--sphere-base', scene.baseHex);
-    node.style.setProperty('--sphere-bloom', scene.bloomHex);
-    node.style.setProperty('--sphere-accent', t.accent);
-    node.style.setProperty('--sphere-ink', t.ink);
-    node.style.setProperty('--sphere-ink-muted', t.inkMuted);
-    node.style.setProperty('--sphere-glass', t.glass);
-    node.style.setProperty('--sphere-glass-border', t.glassBorder);
-  }
-
-  function applyScene(seedOverride, { morph = false, morphDuration = 540 } = {}) {
-    const prevScene = currentScene;
-    const isSystemMood = String(cfg.mood || 'system').trim().toLowerCase() === 'system';
+  const apply = (seedOv, { morph = false, morphDuration = 540 } = {}) => {
+    const prev = currentScene, gOpts = { grainScale: cfg.grainScale };
     currentScene = generateScene({
-      seed: seedOverride,
-      style: cfg.style,
-      mood: cfg.mood,
-      archetype: cfg.archetype,
-      collection: cfg.collection,
-      colors: cfg.colors,
-      colorScheme: isSystemMood ? detectColorScheme() : null,
-      solar: cfg.solar,
-      solarHour: cfg.solarHour,
+      seed: seedOv, style: cfg.style, mood: cfg.mood, archetype: cfg.archetype, collection: cfg.collection, colors: cfg.colors,
+      colorScheme: isSys() ? detectColorScheme() : null, solar: cfg.solar, solarHour: cfg.solarHour, gamut: cfg.gamut, focusRect: cfg.focusRect,
     });
     currentScene.atlas = currentScene.collection;
-
-    applyThemeAttributes(container, currentScene);
-    if (isDirectCanvas) applyThemeAttributes(canvas, currentScene);
-    if (isFullPage) {
-      applyThemeAttributes(document.documentElement, currentScene);
-      document.documentElement.style.backgroundColor = currentScene.baseHex;
-      syncThemeColor(currentScene.baseHex);
+    setTok(container, currentScene);
+    if (isDirect) setTok(canvas, currentScene);
+    if (isFull && D) {
+      setTok(D.documentElement, currentScene);
+      themeMeta ||= D.querySelector('meta[name="theme-color"]:not([media])') || D.head.appendChild(Object.assign(D.createElement('meta'), { name: 'theme-color' }));
+      themeMeta.content = currentScene.baseHex;
     }
-
+    if (phNode?.style) {
+      phNode._sp = 1; phNode.style.backgroundColor = currentScene.baseHex;
+      if (!revealed) phNode.style.backgroundImage = buildInlineCssLayers(currentScene).join(',');
+      phNode._sp = 0;
+    }
     renderer.resize();
-    if (cfg.motion && !prefersReducedMotion) {
-      renderer.startMotion(currentScene, { grainScale: cfg.grainScale });
-      if (morph && prevScene) {
-        renderer.morphTo(currentScene, {
-          duration: morphDuration,
-          grainScale: cfg.grainScale,
-        });
-      }
-    } else if (morph && prevScene && !prefersReducedMotion) {
-      renderer.stopMotion();
-      renderer.morphTo(currentScene, {
-        duration: morphDuration,
-        grainScale: cfg.grainScale,
-      });
+    if (!inView) renderer.stopMotion();
+    else if (cfg.motion && !redM) {
+      renderer.startMotion(currentScene, gOpts);
+      if (morph && prev) renderer.morphTo(currentScene, { duration: morphDuration, ...gOpts });
     } else {
       renderer.stopMotion();
-      renderer.renderOnce(currentScene, { grainScale: cfg.grainScale });
+      if (morph && prev && !redM) renderer.morphTo(currentScene, { duration: morphDuration, ...gOpts });
+      else renderer.renderOnce(currentScene, gOpts);
     }
-
-    if (cfg.transitionIn && !revealed) {
-      revealed = true;
-      if (typeof requestAnimationFrame === 'function') {
-        requestAnimationFrame(() => {
-          canvas.style.opacity = '1';
-        });
-      } else {
-        canvas.style.opacity = '1';
-      }
-    }
-
-    if (typeof options.onScene === 'function') {
-      options.onScene(currentScene);
-    }
-
-    if (typeof CustomEvent === 'function') {
-      el.dispatchEvent(
-        new CustomEvent('sphere:change', {
-          detail: currentScene,
-          bubbles: true,
-        }),
-      );
-    }
-
+    options.onScene?.(currentScene);
+    if (G.CustomEvent) el.dispatchEvent?.(new CustomEvent('sphere:change', { detail: currentScene, bubbles: true }));
     return currentScene;
-  }
-
-  let lastDetectedScheme = detectColorScheme();
-  applyScene(cfg.seed);
-
-  const syncSystemScheme = () => {
-    if (String(cfg.mood || 'system').trim().toLowerCase() !== 'system') return;
-    const nextScheme = detectColorScheme();
-    if (nextScheme === lastDetectedScheme) return;
-    lastDetectedScheme = nextScheme;
-    applyScene(cfg.seed, { morph: !prefersReducedMotion, morphDuration: 620 });
   };
 
-  let schemeMedia = null;
-  if (typeof window !== 'undefined' && typeof window.matchMedia === 'function') {
-    try {
-      schemeMedia = window.matchMedia('(prefers-color-scheme: dark)');
-      if (typeof schemeMedia.addEventListener === 'function') {
-        schemeMedia.addEventListener('change', syncSystemScheme);
-      } else if (typeof schemeMedia.addListener === 'function') {
-        schemeMedia.addListener(syncSystemScheme);
-      }
-    } catch (_) {
-      schemeMedia = null;
-    }
-  }
+  const offs = [], on = (t, ev, fn, o = { passive: true }) => { if (t?.addEventListener) { t.addEventListener(ev, fn, o); offs.push(() => t.removeEventListener(ev, fn)); } };
+  let lastSch = detectColorScheme();
+  apply(cfg.seed);
 
-  const themeObserver =
-    typeof MutationObserver === 'function' &&
-    typeof document !== 'undefined' &&
-    document.documentElement
-      ? new MutationObserver(syncSystemScheme)
-      : null;
-
-  if (themeObserver) {
-    themeObserver.observe(document.documentElement, {
-      attributes: true,
-      attributeFilter: ['class', 'data-theme', 'data-color-scheme', 'data-bs-theme'],
-    });
-  }
-
-  let cachedRect = null;
-  const invalidateRect = () => {
-    cachedRect = null;
+  const syncSch = () => {
+    if (!isSys()) return;
+    const ns = detectColorScheme();
+    if (ns !== lastSch) { lastSch = ns; apply(cfg.seed ?? currentScene?.seed, { morph: !redM && inView, morphDuration: 620 }); }
   };
+  try {
+    const mq = W?.matchMedia?.('(prefers-color-scheme: dark)');
+    if (mq?.addEventListener) on(mq, 'change', syncSch, false); else if (mq?.addListener) { mq.addListener(syncSch); offs.push(() => mq.removeListener(syncSch)); }
+  } catch {}
+  if (G.MutationObserver && D?.documentElement) {
+    const mo = new MutationObserver(syncSch);
+    mo.observe(D.documentElement, { attributes: true, attributeFilter: ['class', 'data-theme', 'data-color-scheme', 'data-bs-theme'] });
+    offs.push(() => mo.disconnect());
+  }
 
-  let resizeRaf = 0;
-  const scheduleResize = () => {
-    invalidateRect();
-    if (resizeRaf) cancelAnimationFrame(resizeRaf);
-    resizeRaf = requestAnimationFrame(() => {
-      resizeRaf = 0;
-      renderer.resize();
-      if (currentScene && !renderer.isAnimating && !renderer.isMorphing) {
-        renderer.renderOnce(currentScene, { grainScale: cfg.grainScale });
-      }
+  let rect = null, rRaf = 0;
+  const onRes = () => {
+    rect = null;
+    if (!inView) return;
+    if (rRaf) cancelAnimationFrame(rRaf);
+    rRaf = requestAnimationFrame(() => {
+      rRaf = 0; renderer.resize();
+      if (currentScene && !renderer.isAnimating && !renderer.isMorphing) renderer.renderOnce(currentScene, { grainScale: cfg.grainScale });
     });
   };
-
-  const ro =
-    typeof ResizeObserver === 'function' ? new ResizeObserver(scheduleResize) : null;
-  if (ro) {
-    ro.observe(isFullPage ? document.documentElement : el);
+  if (G.ResizeObserver) { const ro = new ResizeObserver(onRes); ro.observe(isFull && D ? D.documentElement : el); offs.push(() => ro.disconnect()); }
+  if (G.IntersectionObserver) {
+    const io = new IntersectionObserver((es) => {
+      const e = es[es.length - 1];
+      if (!e || !!e.isIntersecting === inView) return;
+      inView = !!e.isIntersecting; rect = null;
+      if (!inView) { renderer.stopMotion(); return; }
+      if (currentScene) { if (solarDirty) { solarDirty = false; apply(cfg.seed ?? currentScene.seed); } else syncRun(); }
+    }, { rootMargin: '100px' });
+    io.observe(isFull ? canvas : container);
+    offs.push(() => io.disconnect());
   }
 
-  if (typeof window !== 'undefined') {
-    if (isFullPage) {
-      window.addEventListener('resize', scheduleResize, { passive: true });
-      window.visualViewport?.addEventListener('resize', scheduleResize, { passive: true });
-    } else {
-      window.addEventListener('scroll', invalidateRect, { passive: true });
-    }
-  }
+  if (isFull) { on(W, 'resize', onRes); on(W?.visualViewport, 'resize', onRes); }
+  else on(W, 'scroll', () => { rect = null; });
 
-  let hiddenMotion = false;
-  const onVisibility = () => {
-    if (typeof document === 'undefined') return;
-    if (document.hidden) {
-      hiddenMotion = renderer.isAnimating;
-      renderer.stopMotion();
-      return;
-    }
-    if (!currentScene) return;
-    if (cfg.solar) {
-      applyScene(cfg.seed ?? currentScene.seed, { morph: !prefersReducedMotion, morphDuration: 900 });
-    } else if (hiddenMotion && cfg.motion && !prefersReducedMotion) {
-      renderer.startMotion(currentScene, { grainScale: cfg.grainScale });
-    } else {
-      renderer.resize('static');
-      renderer.renderOnce(currentScene, { grainScale: cfg.grainScale });
-    }
-    hiddenMotion = false;
-  };
-  if (typeof document !== 'undefined') {
-    document.addEventListener('visibilitychange', onVisibility);
-  }
+  on(D, 'visibilitychange', () => {
+    if (D?.hidden) { renderer.stopMotion(); return; }
+    if (!currentScene || !inView) return;
+    if (cfg.solar) apply(cfg.seed ?? currentScene.seed, { morph: !redM, morphDuration: 900 });
+    else syncRun();
+  }, false);
 
-  // Solar clock: one re-render every 10 minutes, scheduled with setTimeout so idle stays at 0 RAF.
-  let solarTimer = 0;
-  const scheduleSolarTick = () => {
-    if (solarTimer) clearTimeout(solarTimer);
-    solarTimer = 0;
-    if (!cfg.solar || Number.isFinite(cfg.solarHour) || typeof setTimeout !== 'function') return;
+  let solT = 0;
+  const schedSol = () => {
+    if (solT) clearTimeout(solT);
+    solT = 0;
+    if (!cfg.solar || Number.isFinite(cfg.solarHour) || !G.setTimeout) return;
     const now = new Date();
-    const msToNext = (10 - (now.getMinutes() % 10)) * 60000 - now.getSeconds() * 1000 + 250;
-    solarTimer = setTimeout(() => {
-      solarTimer = 0;
-      if (currentScene && !(typeof document !== 'undefined' && document.hidden)) {
-        applyScene(cfg.seed ?? currentScene.seed, { morph: !prefersReducedMotion, morphDuration: 1400 });
-      }
-      scheduleSolarTick();
-    }, msToNext);
+    solT = setTimeout(() => {
+      solT = 0;
+      if (currentScene) { if (!inView || D?.hidden) solarDirty = true; else apply(cfg.seed ?? currentScene.seed, { morph: !redM, morphDuration: 1400 }); }
+      schedSol();
+    }, (10 - (now.getMinutes() % 10)) * 6e4 - now.getSeconds() * 1e3 + 250);
   };
-  scheduleSolarTick();
+  schedSol();
 
-  const onPointerMove = (e) => {
-    if (e.pointerType === 'touch') return;
-    const wantWhisper = cfg.whisperStrength > 0 && !prefersReducedMotion;
-    if (!renderer.isAnimating && !wantWhisper) return;
+  if (options.interactivePointer !== false) {
+    on(W, 'pointermove', (e) => {
+      if (!inView || e.pointerType === 'touch' || (!renderer.isAnimating && !(cfg.whisperStrength > 0 && !redM))) return;
+      let w = 0, h = 0, l = 0, t = 0;
+      if (isFull && W) { w = W.innerWidth; h = W.innerHeight; }
+      else { rect ||= canvas.getBoundingClientRect(); w = rect.width; h = rect.height; l = rect.left; t = rect.top; }
+      if (!w || !h) return;
+      const nx = ((e.clientX - l) / w) * 2 - 1, ny = ((e.clientY - t) / h) * 2 - 1;
+      if (!isFull && (Math.abs(nx) > 1.25 || Math.abs(ny) > 1.25)) {
+        if (!renderer.isAnimating && renderer.isWhispering) renderer.wakePointer(0, 0, { strength: 0, grainScale: cfg.grainScale });
+        return;
+      }
+      if (renderer.isAnimating) renderer.setPointer(nx, ny);
+      else renderer.wakePointer(nx, ny, { strength: cfg.whisperStrength, grainScale: cfg.grainScale });
+    });
+    on(D, 'pointerleave', () => { if (!renderer.isAnimating && renderer.isWhispering) renderer.wakePointer(0, 0, { strength: 0, grainScale: cfg.grainScale }); });
+  }
 
-    let w = 0;
-    let h = 0;
-    let left = 0;
-    let top = 0;
-    if (isFullPage && typeof window !== 'undefined') {
-      w = window.innerWidth;
-      h = window.innerHeight;
-    } else {
-      if (!cachedRect) cachedRect = canvas.getBoundingClientRect();
-      w = cachedRect.width;
-      h = cachedRect.height;
-      left = cachedRect.left;
-      top = cachedRect.top;
-    }
-    if (!w || !h) return;
-
-    const nx = ((e.clientX - left) / w) * 2 - 1;
-    const ny = ((e.clientY - top) / h) * 2 - 1;
-
-    if (renderer.isAnimating) {
-      renderer.setPointer(nx, ny);
-    } else {
-      renderer.wakePointer(nx, ny, {
-        strength: cfg.whisperStrength,
-        grainScale: cfg.grainScale,
+  let tiltB = null, tiltOn = false;
+  const attTilt = () => {
+    if (!tiltOn && W && G.DeviceOrientationEvent) {
+      tiltOn = true;
+      on(W, 'deviceorientation', (e) => {
+        if (!inView || cfg.whisperStrength <= 0 || redM || renderer.isAnimating || !Number.isFinite(e.gamma) || !Number.isFinite(e.beta)) return;
+        tiltB ||= { g: e.gamma, b: e.beta };
+        renderer.wakePointer(clamp((e.gamma - tiltB.g) / 28, -1, 1), clamp((e.beta - tiltB.b) / 28, -1, 1), { strength: cfg.whisperStrength, grainScale: cfg.grainScale });
       });
     }
   };
+  if (options.interactivePointer !== false && cfg.whisperStrength > 0 && W?.matchMedia?.('(hover: none) and (pointer: coarse)')?.matches && G.DeviceOrientationEvent && typeof DeviceOrientationEvent.requestPermission !== 'function') attTilt();
 
-  const onPointerLeave = () => {
-    if (!renderer.isAnimating && renderer.isWhispering) {
-      renderer.wakePointer(0, 0, { strength: 0, grainScale: cfg.grainScale });
-    }
-  };
-
-  if (options.interactivePointer !== false && typeof window !== 'undefined') {
-    window.addEventListener('pointermove', onPointerMove, { passive: true });
-    if (typeof document !== 'undefined') {
-      document.addEventListener('pointerleave', onPointerLeave, { passive: true });
-    }
-  }
-
-  // Tilt light: on touch devices the phone's orientation drives the same wake-and-sleep keylight.
-  const coarsePointer =
-    typeof window !== 'undefined' && window.matchMedia?.('(hover: none) and (pointer: coarse)')?.matches;
-  let tiltBase = null;
-  const onTilt = (e) => {
-    if (cfg.whisperStrength <= 0 || prefersReducedMotion || renderer.isAnimating) return;
-    if (!Number.isFinite(e.gamma) || !Number.isFinite(e.beta)) return;
-    if (!tiltBase) tiltBase = { g: e.gamma, b: e.beta };
-    const nx = Math.max(-1, Math.min(1, (e.gamma - tiltBase.g) / 28));
-    const ny = Math.max(-1, Math.min(1, (e.beta - tiltBase.b) / 28));
-    renderer.wakePointer(nx, ny, { strength: cfg.whisperStrength, grainScale: cfg.grainScale });
-  };
-  let tiltAttached = false;
-  const attachTilt = () => {
-    if (tiltAttached || typeof window === 'undefined' || typeof DeviceOrientationEvent === 'undefined') return;
-    tiltAttached = true;
-    window.addEventListener('deviceorientation', onTilt, { passive: true });
-  };
-  const enableTilt = async () => {
-    if (typeof DeviceOrientationEvent === 'undefined') return false;
-    if (typeof DeviceOrientationEvent.requestPermission === 'function') {
-      try {
-        const state = await DeviceOrientationEvent.requestPermission();
-        if (state !== 'granted') return false;
-      } catch (_) {
-        return false;
-      }
-    }
-    attachTilt();
-    return true;
-  };
-  if (coarsePointer && options.interactivePointer !== false && cfg.whisperStrength > 0) {
-    if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission !== 'function') {
-      attachTilt();
-    }
-  }
-
-  const instance = {
-    canvas,
-    renderer,
-    get scene() {
-      return currentScene;
-    },
+  const inst = {
+    canvas, renderer,
+    get scene() { return currentScene; },
+    get isIntersecting() { return inView; },
     regenerate(rawNext = {}) {
-      const next =
-        rawNext.url || rawNext.preset
-          ? { ...parsePresetUrl(rawNext.url || rawNext.preset), ...rawNext }
-          : rawNext;
-
-      if (next.seed !== undefined) cfg.seed = next.seed;
-      if (next.style !== undefined) cfg.style = next.style;
-      if (next.mood !== undefined) cfg.mood = next.mood;
-      if (next.harmony !== undefined) cfg.archetype = next.harmony;
-      if (next.archetype !== undefined) cfg.archetype = next.archetype;
-      const nextAtlas = next.atlas !== undefined ? next.atlas : next.collection;
-      if (nextAtlas !== undefined) cfg.collection = normalizeAtlasId(nextAtlas);
-      if (next.colors !== undefined) cfg.colors = next.colors;
-      if (next.grain !== undefined) cfg.grainScale = parseNum(next.grain, 1.0);
-      if (next.grainScale !== undefined) cfg.grainScale = parseNum(next.grainScale, 1.0);
-      if (next.motion !== undefined) cfg.motion = Boolean(next.motion);
-      if (next.lightFollow !== undefined) {
-        cfg.whisperStrength = resolveWhisperStrength(next.lightFollow);
+      const cl = {};
+      for (const [k, v] of Object.entries(rawNext || {})) if (v !== undefined) cl[k] = v;
+      const nu = cl.url ?? cl.preset ?? '', hasUpd = REGEN_KEYS.some((k) => k in cl);
+      let nx = cl;
+      if (nu) {
+        const p = parsePresetUrl(nu);
+        nx = { ...p, ...cl };
+        if (p.style && cl.mode === undefined && cl.style === 'auto') nx.style = p.style;
+        if (p.mood && cl.mood === 'system') nx.mood = p.mood;
+        if (p.harmony && cl.harmony === 'auto' && cl.archetype === undefined) nx.harmony = p.harmony;
+        if (p.collection && cl.collection === null && cl.atlas === undefined) nx.collection = p.collection;
+        if (p.colors && cl.colors === null) nx.colors = p.colors;
       }
-      if (next.solar !== undefined) cfg.solar = parseBool(next.solar, false);
-      if (next.solarHour !== undefined) cfg.solarHour = parseNum(next.solarHour, null);
-      scheduleSolarTick();
-
-      const seedToUse = next.seed !== undefined ? next.seed : undefined;
-      return applyScene(seedToUse, {
-        morph: Boolean(next.morph),
-        morphDuration: next.morphDuration ?? 540,
-      });
+      const roll = /^(random|auto)$/i.test(String(nx.seed || '')) || nx.seed === null || cl.newSeed === true;
+      if (roll) { cfg.seed = undefined; delete nx.seed; }
+      patchCfg(cfg, nx, renderer);
+      schedSol();
+      return apply(roll || !hasUpd ? undefined : (cfg.seed ?? currentScene?.seed), { morph: !!nx.morph, morphDuration: nx.morphDuration ?? 540 });
     },
-    enableTilt,
-    refreshCssVariables() {
-      const updatedCss = readCssVariableConfig(el);
-      if (updatedCss.colors) cfg.colors = updatedCss.colors;
-      if (updatedCss.style) cfg.style = updatedCss.style;
-      if (updatedCss.mood) cfg.mood = updatedCss.mood;
-      if (updatedCss.harmony) cfg.archetype = updatedCss.harmony;
-      if (updatedCss.atlas !== undefined || updatedCss.collection !== undefined) {
-        cfg.collection = updatedCss.atlas ?? updatedCss.collection;
+    async enableTilt() {
+      if (!G.DeviceOrientationEvent) return false;
+      if (typeof DeviceOrientationEvent.requestPermission === 'function') {
+        try { if ((await DeviceOrientationEvent.requestPermission()) !== 'granted') return false; } catch { return false; }
       }
-      if (updatedCss.grain !== undefined) cfg.grainScale = updatedCss.grain;
-      return applyScene(cfg.seed);
+      attTilt(); return true;
     },
-    exportImage(exportOpts = {}) {
-      return renderer.exportImage(currentScene, {
-        grainScale: cfg.grainScale,
-        ...exportOpts,
-      });
-    },
-    exportPNG(exportOpts = {}) {
-      return renderer.exportPNG(currentScene, {
-        grainScale: cfg.grainScale,
-        ...exportOpts,
-      });
-    },
-    exportSVG(exportOpts = {}) {
-      return renderer.exportSVG(currentScene, {
-        grainScale: cfg.grainScale,
-        ...exportOpts,
-      });
-    },
-    exportCSS() {
-      return renderer.exportCSS(currentScene);
-    },
+    refreshCssVariables() { patchCfg(cfg, readCss(el), renderer); return apply(cfg.seed ?? currentScene?.seed); },
+    exportCSS: () => renderer.exportCSS(currentScene),
     destroy() {
-      if (resizeRaf) cancelAnimationFrame(resizeRaf);
-      if (solarTimer) clearTimeout(solarTimer);
-      if (ro) ro.disconnect();
-      if (themeObserver) themeObserver.disconnect();
-      if (schemeMedia) {
-        if (typeof schemeMedia.removeEventListener === 'function') {
-          schemeMedia.removeEventListener('change', syncSystemScheme);
-        } else if (typeof schemeMedia.removeListener === 'function') {
-          schemeMedia.removeListener(syncSystemScheme);
-        }
-      }
-      if (typeof window !== 'undefined') {
-        if (isFullPage) {
-          window.removeEventListener('resize', scheduleResize);
-          window.visualViewport?.removeEventListener('resize', scheduleResize);
-        } else {
-          window.removeEventListener('scroll', invalidateRect);
-        }
-        window.removeEventListener('pointermove', onPointerMove);
-        if (tiltAttached) window.removeEventListener('deviceorientation', onTilt);
-      }
-      if (typeof document !== 'undefined') {
-        document.removeEventListener('pointerleave', onPointerLeave);
-        document.removeEventListener('visibilitychange', onVisibility);
-      }
+      if (rRaf) cancelAnimationFrame(rRaf);
+      if (solT) clearTimeout(solT);
+      for (const f of offs) f();
+      if (phNode?.style) { phNode._sp = 1; phNode.style.backgroundImage = prevPhBg; phNode._sp = 0; }
       renderer.destroy();
-      if (!isDirectCanvas) canvas.remove();
+      if (!isDirect) canvas.remove();
       delete el.__sphereInstance;
     },
   };
-
-  el.__sphereInstance = instance;
-  return instance;
+  for (const m of ['exportImage', 'exportPNG', 'exportSVG']) inst[m] = (o) => renderer[m](currentScene, { grainScale: cfg.grainScale, ...o });
+  return (el.__sphereInstance = inst);
 }
 
 export { mountSphereBackground as mount, mountSphereBackground as mountAuraBackground };
 
-export function autoMountSphereBackgrounds(root = document) {
-  if (!root || typeof root.querySelectorAll !== 'function') return [];
-  const instances = [];
-  if (root === document && document.documentElement?.hasAttribute('data-sphere-bg')) {
-    instances.push(mountSphereBackground(document.documentElement));
-  } else if (root.nodeType === 1 && root.hasAttribute?.('data-sphere-bg')) {
-    instances.push(mountSphereBackground(root));
+export function autoMountSphereBackgrounds(root = G.document) {
+  const D = G.document;
+  if (!root?.querySelectorAll) return [];
+  const out = [];
+  if (root === D && D?.documentElement?.hasAttribute('data-sphere-bg')) out.push(mountSphereBackground(D.documentElement));
+  else if (root.nodeType === 1 && root.hasAttribute?.('data-sphere-bg')) out.push(mountSphereBackground(root));
+  for (const el of root.querySelectorAll('[data-sphere-bg]')) out.push(mountSphereBackground(el));
+  return out;
+}
+
+export function registerSphereElement(tag = 'sphere-gl') {
+  if (!G.HTMLElement || !G.customElements) return null;
+  const ex = customElements.get(tag);
+  if (ex) return ex;
+  class SphereEl extends HTMLElement {
+    static get observedAttributes() { return OBS; }
+    connectedCallback() {
+      if (!this.style.display) { this._sp = 1; this.style.display = 'block'; this._sp = 0; }
+      this._i = mountSphereBackground(this);
+    }
+    disconnectedCallback() { this._i?.destroy(); this._i = null; }
+    attributeChangedCallback(n, o, v) {
+      if (o === v || !this._i || this._sp || (n === 'style' && mAttr(o) === mAttr(v))) return;
+      this._i.regenerate(readAttrs(this, 2));
+    }
+    get instance() { return this._i || null; }
+    regenerate(o) { return this._i?.regenerate(o); }
   }
-  for (const el of root.querySelectorAll('[data-sphere-bg]')) {
-    instances.push(mountSphereBackground(el));
-  }
-  return instances;
+  customElements.define(tag, SphereEl);
+  return SphereEl;
 }

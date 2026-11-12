@@ -1,0 +1,176 @@
+# sphere-gl (v1.5.0)
+
+> Perceptual OKLCH/OKLab and Display-P3 WebGL2 background and 5K wallpaper engine. Zero runtime dependencies. Sleep-first 0% idle GPU (`motion: false` by default). Automatic WCAG >= 4.5:1 `--sphere-ink` and `--sphere-glass` UI tokens.
+
+- Package: `sphere-gl`
+- Subpaths: `sphere-gl`, `sphere-gl/react`, `sphere-gl/framer`, `sphere-gl/export`, `sphere-gl/palettes`, `sphere-gl/fallback`, `sphere-gl/studio`
+- Studio & Preset Builder: https://denissitnikov.github.io/sphere-gl/
+- Repository: https://github.com/denissitnikov/sphere-gl
+
+## Quick Copy-Paste Snippets
+
+### 1. Web Component (`<sphere-gl>`, plain HTML / Astro / Vue / Svelte / Webflow)
+
+```html
+<script src="https://cdn.jsdelivr.net/npm/sphere-gl@1.5.0/dist/sphere-gl.min.js" defer></script>
+
+<sphere-gl
+  seed="7F3K9A"
+  mode="fluted"
+  atlas="fintech"
+  mood="system"
+  grain="1.65"
+  light-follow="true"
+  style="min-height: 100dvh; display: grid; place-items: center; color: var(--sphere-ink);"
+>
+  <section style="background: var(--sphere-glass); border: 1px solid var(--sphere-glass-border); backdrop-filter: blur(20px); padding: 2rem; border-radius: 20px;">
+    <h1>Readable by default</h1>
+    <p style="color: var(--sphere-ink-muted);">Contrast is verified across a 3x3 hero grid.</p>
+  </section>
+</sphere-gl>
+```
+
+Observed `<sphere-gl>` attributes:
+`seed`, `mode`, `style` (shader mode only when non-CSS; prefer `mode`), `mood`, `atlas`, `harmony`, `grain`, `motion`, `light-follow`, `solar`, `hour`, `colors`, `preset`.
+
+### 2. CDN Auto-Mount (`data-sphere-bg`)
+
+```html
+<script src="https://cdn.jsdelivr.net/npm/sphere-gl@1.5.0/dist/sphere-gl.min.js" defer></script>
+<body data-sphere-bg data-atlas="ocean" data-mode="sphere" data-mood="system"></body>
+```
+
+### 3. React & Next.js App Router (Zero-Flash SSR + Client WebGL2)
+
+When `seed`, `atlas`, `colors`, or `url` is passed, `SphereBackground` renders `--sphere-*` tokens and an `in oklab` CSS gradient inline during SSR before WebGL2 hydrates.
+
+```tsx
+import { SphereBackground } from 'sphere-gl/react';
+
+export function Hero() {
+  return (
+    <SphereBackground
+      seed="7F3K9A"
+      atlas="ocean"
+      mode="sphere"
+      mood="system"
+      gamut="auto"
+      focusRect={[0.2, 0.25, 0.8, 0.75]}
+      style={{ minHeight: '100dvh', color: 'var(--sphere-ink)' }}
+    >
+      <div style={{ maxWidth: 680, margin: '0 auto', padding: '6rem 1.5rem' }}>
+        <h1>Perceptual wide-gamut backgrounds</h1>
+        <p style={{ color: 'var(--sphere-ink-muted)' }}>0% GPU when idle.</p>
+      </div>
+    </SphereBackground>
+  );
+}
+```
+
+Important React prop rule: pass the shader mode via `mode="sphere"`. Reserve `style={{ ... }}` for `React.CSSProperties`.
+
+Server-only token generation without React wrapper:
+
+```ts
+import { getSphereTokensAndCss } from 'sphere-gl/palettes';
+
+const { tokens, cssBackground, theme } = getSphereTokensAndCss({
+  seed: '7F3K9A',
+  atlas: 'paper',
+  mode: 'silk',
+  mood: 'light',
+});
+```
+
+### 4. Tailwind CSS v4 & CSS Color 4 Variables
+
+`sphere-gl` natively parses `#hex`, `oklch(L C H)`, `oklab(L a b)`, `hsl(H S L)`, and percentage/byte `rgb()` without 8-bit quantization.
+
+```css
+.hero-surface {
+  --sphere-color-1: oklch(0.97 0.012 85);
+  --sphere-color-2: oklch(0.64 0.19 254);
+  --sphere-color-3: oklch(0.72 0.17 42);
+  --sphere-color-4: oklch(0.58 0.21 302);
+  --sphere-mode: prism;
+  --sphere-gamut: auto;
+  color: var(--sphere-ink);
+}
+```
+
+Call `instance.refreshCssVariables()` if CSS custom properties change at runtime.
+
+### 5. Imperative JS / TypeScript & Subpath Exports
+
+```ts
+import { mountSphereBackground } from 'sphere-gl';
+import { exportCSS, exportPNG, exportSVG } from 'sphere-gl/export';
+
+const bg = mountSphereBackground('#hero', {
+  atlas: 'amber',
+  mode: 'fluted',
+  mood: 'system',
+  gamut: 'auto',
+  focusRect: [0.2, 0.3, 0.8, 0.7],
+});
+
+// Update visual options without losing the current seed:
+bg.regenerate({ mode: 'topo', grain: 0 });
+
+// Roll a fresh random seed with a smooth 540ms GPU morph:
+bg.regenerate({ seed: 'random', morph: true });
+
+// Export assets (lazy-loaded or imported from sphere-gl/export):
+const css = exportCSS(bg.scene!);
+const svg = exportSVG(bg.scene!, { width: 3840, height: 2160 });
+const png = await exportPNG(bg.renderer, bg.scene!, { width: 5120, height: 2880, strict: true });
+```
+
+### 6. Framer Code Component
+
+```tsx
+import SphereGL from 'sphere-gl/framer';
+export default SphereGL;
+```
+
+## Valid Enum Values
+
+- `mode` (`StyleMode` | `'auto'`):
+  `'mesh'`, `'sphere'`, `'silk'`, `'caustic'`, `'fluted'`, `'prism'`, `'topo'`, `'auto'`
+- `mood` (`MoodMode`):
+  `'system'`, `'any'`, `'light'`, `'split'`, `'dark'`
+- `gamut` (`GamutMode`):
+  `'auto'` (uses Display-P3 when supported), `'p3'`, `'srgb'`
+- `atlas` (`CoreAtlasId` | semantic alias | `'auto'`):
+  - Coast & Sky: `'burren-chalk'`, `'skellig-night'`, `'antrim-basalt'`, `'boyne-solstice'`, `'wicklow-amber'`, `'achill-dusk'`, `'dingle-horizon'`, `'connemara-lough'`
+  - Emerald Isle: `'dawn-meadow'`, `'moss-stone'`, `'peat-bog'`, `'gorse-hedgerow'`, `'moher-slate'`, `'glen-shade'`, `'oak-canopy'`
+- `harmony` (`CoreHarmonyId` | `'auto'`):
+  `'alabaster-honey'`, `'porcelain-peach-sage'`, `'morning-lilac-pearl'`, `'solstice-ochre-mist'`, `'cerulean-tangerine'`, `'steel-lavender-amber'`, `'aegean-coral-horizon'`, `'twilight-violet-citrine'`, `'electric-sapphire'`, `'velvet-ember-obsidian'`, `'abyssal-aurora-jade'`, `'nocturne-amethyst-rose'`, `'harmonic-wild'`, `'auto'`
+
+## Semantic Atlas Aliases
+
+LLMs and designers can pass intent names to `atlas`:
+
+- `ocean`, `fintech`, `sapphire`, `navy`, `midnight` -> `skellig-night`
+- `amber`, `gold`, `luxury`, `bronze`, `honey` -> `wicklow-amber`
+- `forest`, `sage`, `matcha`, `meadow`, `mint` -> `dawn-meadow`
+- `paper`, `editorial`, `minimal`, `chalk`, `ivory` -> `burren-chalk`
+- `slate`, `obsidian`, `mono`, `charcoal` -> `antrim-basalt`
+- `sunset`, `coral`, `horizon`, `peach` -> `dingle-horizon`
+- `eclipse`, `solstice` -> `boyne-solstice`
+- `lavender`, `twilight`, `violet` -> `achill-dusk`
+- `teal`, `lagoon`, `jade` -> `connemara-lough`
+- `moss`, `stone`, `granite` -> `moss-stone`
+- `peat`, `earth` -> `peat-bog`
+- `gorse`, `citrine` -> `gorse-hedgerow`
+- `cliff`, `nordic` -> `moher-slate`
+- `fern`, `emerald` -> `glen-shade`
+- `oak`, `olive` -> `oak-canopy`
+
+## Contrast & Hero Readability Rules
+
+1. Always style foreground text over a `sphere-gl` container with `color: var(--sphere-ink)` and secondary copy with `color: var(--sphere-ink-muted)`.
+2. `computeUiTokens()` evaluates an analytical 3x3 OKLab field grid across `[0.2, 0.5, 0.8]^2` (or your custom `focusRect`) and clamps outlier poles so `--sphere-ink` (`#FFFFFF`, `#0F172A`, or `#020617`) maintains WCAG >= 4.5:1 contrast against both the median and worst-quartile hero samples.
+3. When placing dense hero copy over a known box, pass `focusRect: [x0, y0, x1, y1]` in normalized `0..1` coordinates (for example `[0.15, 0.25, 0.85, 0.75]`) to attenuate high-chroma or dark poles overlapping the text region.
+4. For cards or navigation bars floating over `split` or high-chroma scenes, pair `background: var(--sphere-glass)` and `border: 1px solid var(--sphere-glass-border)` with `backdrop-filter: blur(16px)`.
+5. Setting `grain: 0` removes visible film texture while keeping a `+/-0.5 LSB` triangular dither so 8-bit dark gradients stay free of banding.
