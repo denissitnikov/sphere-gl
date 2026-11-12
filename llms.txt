@@ -12,7 +12,7 @@
 ### 1. Web Component (`<sphere-gl>`, plain HTML / Astro / Vue / Svelte / Webflow)
 
 ```html
-<script src="https://cdn.jsdelivr.net/npm/sphere-gl@1.5.0/dist/sphere-gl.min.js" defer></script>
+<script src="https://cdn.jsdelivr.net/gh/denissitnikov/sphere-gl@v1.5.0/dist/sphere-gl.min.js" defer></script>
 
 <sphere-gl
   seed="7F3K9A"
@@ -36,7 +36,7 @@ Observed `<sphere-gl>` attributes:
 ### 2. CDN Auto-Mount (`data-sphere-bg`)
 
 ```html
-<script src="https://cdn.jsdelivr.net/npm/sphere-gl@1.5.0/dist/sphere-gl.min.js" defer></script>
+<script src="https://cdn.jsdelivr.net/gh/denissitnikov/sphere-gl@v1.5.0/dist/sphere-gl.min.js" defer></script>
 <body data-sphere-bg data-atlas="ocean" data-mode="sphere" data-mood="system"></body>
 ```
 

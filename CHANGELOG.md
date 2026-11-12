@@ -13,7 +13,7 @@
 - `IntersectionObserver` (`rootMargin: '100px'`) viewport culling and `[-1.25, 1.25]` pointer bounds gating for non-full-page mounts.
 
 ### Changed
-- Cut core `dist/sphere-gl.esm.min.js` to `11.97 KB` gzipped and `dist/sphere-gl.react.js` to `1.25 KB` gzipped by externalizing `sphere-gl` in React/Framer wrappers and splitting `sphere-gl/export`, `sphere-gl/fallback`, `sphere-gl/palettes`, and `sphere-gl/studio` into subpath modules.
+- Cut core `dist/sphere-gl.esm.min.js` to `12.31 KB` gzipped and `dist/sphere-gl.react.js` to `1.25 KB` gzipped by externalizing `sphere-gl` in React/Framer wrappers and splitting `sphere-gl/export`, `sphere-gl/fallback`, `sphere-gl/palettes`, and `sphere-gl/studio` into subpath modules.
 - Specialized fragment shaders per optical mode (`#define STYLE n`) with lazy compilation, `WebGLProgram` caching, async `KHR_parallel_shader_compile` polling, and CPU-hoisted per-pole math uploaded via packed `vec4` uniform arrays.
 - Enforced hard pixel ceilings (`width * height <= budget`) across `3x` mobile and `5K` viewports, added an 8-frame median GPU-timing DPR governor (`[0.5, 1.0]`), and rendered interactive frames into a persistent FBO blitted with `gl.LINEAR` so the canvas backbuffer never reallocates on pointer wake or settle.
 - Upgraded `exportCSS()` to emit `in oklab` elliptical radial gradients with `Display-P3` `@supports` blocks, proper bloom layer ordering, and an `sRGB` `@supports not` fallback; upgraded `exportImage()` to reuse the active WebGL2 context with tiled offscreen RGBA8 FBOs and `blob.degraded` / `strict` signaling.
