@@ -510,7 +510,10 @@
       left: 50%;
       transform: translateX(-50%) translateY(14px) scale(0.985);
       z-index: 29;
-      width: min(980px, calc(100vw - 24px));
+      width: min(1020px, calc(100vw - 24px));
+      max-height: calc(100dvh - 176px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
+      display: flex;
+      flex-direction: column;
       padding: 14px 16px;
       border-radius: 22px;
       background: rgba(12, 16, 26, 0.84);
@@ -540,6 +543,7 @@
       gap: 10px;
       margin-bottom: 10px;
       flex-wrap: wrap;
+      flex-shrink: 0;
     }
 
     .drawer-pills {
@@ -612,8 +616,13 @@
 
     .col-grid {
       display: grid;
-      grid-template-columns: repeat(4, minmax(0, 1fr));
+      grid-template-columns: repeat(5, minmax(0, 1fr));
       gap: 10px;
+      min-height: 0;
+      overflow-y: auto;
+      overscroll-behavior: contain;
+      scrollbar-width: thin;
+      scrollbar-color: rgba(255, 255, 255, 0.24) transparent;
     }
 
     .col-card {
@@ -1029,6 +1038,10 @@
       .solar-scrub input[type="range"] {
         width: 110px;
       }
+      .collections-drawer {
+        bottom: calc(122px + env(safe-area-inset-bottom, 0px));
+        max-height: calc(100dvh - 188px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
+      }
       .col-grid {
         grid-template-columns: repeat(2, minmax(0, 1fr));
       }
@@ -1108,7 +1121,7 @@
     </div>
     <h1 class="hero-headline">A fresh background on every visit.</h1>
     <p class="hero-sub">
-      29 KB gzip, zero dependencies. Picks clean OKLCH colors, draws one sharp WebGL2 frame in under 1 ms, and sets your text and glass colors automatically.
+      12.3 KB gzip, zero dependencies. Picks clean OKLCH colors, draws one sharp WebGL2 frame in under 1 ms, and sets your text and glass colors automatically.
     </p>
     <div class="hero-actions">
       <button class="hero-cta primary" id="hero-gen-btn">New Palette (Space)</button>
@@ -1257,7 +1270,7 @@
   <div class="modal-backdrop" id="code-modal">
     <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
       <div class="modal-header">
-        <div class="modal-title" id="modal-title">Add sphere-gl to Your Site (11.9 KB gzip core · MIT · Zero Deps)</div>
+        <div class="modal-title" id="modal-title">Add sphere-gl to Your Site (12.3 KB gzip core · MIT · Zero Deps)</div>
         <button class="icon-btn" id="close-modal-btn">✕</button>
       </div>
       <p class="modal-desc">
