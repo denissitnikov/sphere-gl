@@ -313,6 +313,17 @@ export function mountSphereBackground(target, options = {}) {
 
 export { mountSphereBackground as mount, mountSphereBackground as mountAuraBackground };
 
+export function formatPresetUrl(scene, { grain = 1.65, motion = false, lockSeed = true, colors = null, solar = false, solarHour = null, lightFollow = true, preview = null, baseUrl = 'https://denissitnikov.github.io/sphere-gl/' } = {}) {
+  const p = new URLSearchParams(), col = scene?.atlas || scene?.collection;
+  for (const [k, v] of [
+    ['preview', preview !== 'canvas' && preview], ['seed', lockSeed && scene?.seed], ['col', col], ['style', scene?.style], ['mood', scene?.mood],
+    ['arch', scene?.archetypeId !== 'custom-palette' && !col && scene?.archetypeId], ['grain', Number.isFinite(grain) ? grain : false],
+    ['motion', motion && 1], ['light', (lightFollow === false || lightFollow === 0) ? 0 : false], ['solar', (solar || scene?.solar) && 1],
+    ['hour', Number.isFinite(solarHour) ? Math.round(solarHour * 100) / 100 : false], ['colors', Array.isArray(colors) && colors.length > 1 && colors.join(',')],
+  ]) if (v !== false && v != null && v !== '') p.set(k, String(v));
+  return `${baseUrl}#${p}`;
+}
+
 export function autoMountSphereBackgrounds(root = G.document) {
   const D = G.document;
   if (!root?.querySelectorAll) return [];
