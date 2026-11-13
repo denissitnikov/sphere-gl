@@ -661,5 +661,5 @@ if (distScene.atlas !== 'glen-shade' || distScene.mode !== 'topo' || distScene.g
 }
 
 console.log(
-  `sphere-gl v1.5.0 smoke test passed (${count} deterministic scenes, 7 optical modes, 15 Irish atlases + semantic aliases, CSS Color 4 oklch/oklab/hsl parser, focusRect attenuation, 3x3 WCAG >= 4.5:1 hero contrast, React/Framer single-mount + URL preset & seed stability, OKLab + Display-P3 CSS/SVG export, and strict 3x/5K pixel-budget enforcement verified).`,
+  `sphere-gl v1.5.1 smoke test passed (${count} deterministic scenes, 7 optical modes, 15 Irish atlases + semantic aliases, CSS Color 4 oklch/oklab/hsl parser, focusRect attenuation, 3x3 WCAG >= 4.5:1 hero contrast, React/Framer single-mount + URL preset & seed stability, OKLab + Display-P3 CSS/SVG export, and strict 3x/5K pixel-budget enforcement verified).`,
 );

@@ -1,6 +1,6 @@
 {
   "name": "sphere-gl",
-  "version": "1.5.0",
+  "version": "1.5.1",
   "description": "WebGL2 and OKLCH/Display-P3 background and 5K wallpaper engine. Zero runtime dependencies, 0% idle GPU.",
   "type": "module",
   "main": "./dist/sphere-gl.esm.min.js",

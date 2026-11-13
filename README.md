@@ -20,7 +20,7 @@
 Load the self-mounting bundle from jsDelivr and drop `<sphere-gl>` around your content:
 
 ```html
-<script src="https://cdn.jsdelivr.net/gh/denissitnikov/sphere-gl@v1.5.0/dist/sphere-gl.min.js" defer></script>
+<script src="https://cdn.jsdelivr.net/gh/denissitnikov/sphere-gl@v1.5.1/dist/sphere-gl.min.js" defer></script>
 
 <sphere-gl
   atlas="ocean"
@@ -38,16 +38,16 @@ Or add `data-sphere-bg` to `<body>` or any container element:
 ```html
 <body data-sphere-bg data-transition-in data-sphere-mode="sphere" data-sphere-grain="1.65">
   <h1 style="color: var(--sphere-ink)">A fresh background on every visit.</h1>
-  <script src="https://cdn.jsdelivr.net/gh/denissitnikov/sphere-gl@v1.5.0/dist/sphere-gl.min.js" defer></script>
+  <script src="https://cdn.jsdelivr.net/gh/denissitnikov/sphere-gl@v1.5.1/dist/sphere-gl.min.js" defer></script>
 </body>
 ```
 
 ### Option 2: Install for React, Next.js, Vite, or TypeScript
 
-Install directly from the `v1.5.0` release tag (zero runtime dependencies, `.d.ts` types included):
+Install directly from the `v1.5.1` release tag (zero runtime dependencies, `.d.ts` types included):
 
 ```bash
-npm install github:denissitnikov/sphere-gl#v1.5.0
+npm install github:denissitnikov/sphere-gl#v1.5.1
 ```
 
 ## Features at a glance
@@ -65,7 +65,7 @@ npm install github:denissitnikov/sphere-gl#v1.5.0
 
 ### How `sphere-gl` compares
 
-| Metric | `sphere-gl` (`v1.5.0`) | Typical WebGL mesh libraries | Static 4K hero PNG |
+| Metric | `sphere-gl` (`v1.5.1`) | Typical WebGL mesh libraries | Static 4K hero PNG |
 | :--- | :--- | :--- | :--- |
 | **Core bundle (gzip)** | **`12.31 KB`** (`1.25 KB` React wrapper) | `11 KB` to `45 KB` | `2,000 KB` to `5,000 KB` |
 | **Color blending space** | **`OKLCH` + `OKLab` + `Display-P3`** | Linear or gamma `sRGB` (gray midpoints) | Baked `sRGB` pixels |
@@ -166,7 +166,7 @@ const { tokens, cssBackground, theme } = getSphereTokensAndCss({
 In Framer, open **Assets > Code > Create Code File** and paste:
 
 ```tsx
-export { default } from "https://esm.sh/gh/denissitnikov/sphere-gl@v1.5.0/src/framer.js?external=react,framer"
+export { default } from "https://esm.sh/gh/denissitnikov/sphere-gl@v1.5.1/src/framer.js?external=react,framer"
 ```
 
 ### Vanilla ES module and exports (`sphere-gl` + `sphere-gl/export`)
