@@ -76,7 +76,7 @@ npm install github:denissitnikov/sphere-gl#v1.5.0
 
 ## Why I built this
 
-I wanted a background for my own website that looked fresh on every visit without shipping a 4 MB PNG or draining laptop batteries with an always-on 60fps shader loop.
+I wanted a background for my own website, [slidetab.app](https://slidetab.app), that looked fresh on every visit without shipping a 4 MB PNG or draining laptop batteries with an always-on 60fps shader loop.
 
 When I tried randomizing colors in standard gradients, three problems kept coming back. Blending opposite colors like blue and orange in standard `sRGB` turns the middle into a dull gray-brown. Randomizing lightness breaks text legibility whenever a bright pole lands behind white text or a dark background appears while the visitor's OS is in Light Mode. And most WebGL background scripts run `requestAnimationFrame` forever even when nothing on screen is moving.
 
